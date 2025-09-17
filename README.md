@@ -43,6 +43,39 @@ proxy-chrome-extension/
 └── README.md                # This file
 ```
 
+## 🚀 Quick Start
+
+### For Production (HTTPS with SSL)
+```bash
+# 1. Clone and navigate to server directory
+cd server/
+
+# 2. Set up SSL certificate (Let's Encrypt recommended)
+chmod +x ssl-setup.sh
+./ssl-setup.sh --domain your-domain.com --email your-email@domain.com --method letsencrypt
+
+# 3. Configure environment
+cp env.example .env
+echo "API_KEY=$(openssl rand -hex 32)" >> .env
+
+# 4. Start production services
+docker compose --profile production up -d
+
+# 5. Update Chrome extension with your HTTPS URL
+# Edit chrome-extension/background.js: url: 'https://your-domain.com'
+```
+
+### For Development (HTTP)
+```bash
+# 1. Navigate to server directory
+cd server/
+
+# 2. Start development service
+docker compose --profile development up -d
+
+# 3. Chrome extension will use: http://localhost:5000
+```
+
 ## 🛠️ Installation & Setup
 
 ### Prerequisites
@@ -50,6 +83,7 @@ proxy-chrome-extension/
 - Chrome Browser
 - Docker with Docker Compose plugin (for containerized deployment)
 - Windows target machines with PowerShell Remoting enabled
+- Domain name (for production HTTPS setup)
 
 ### 1. Chrome Extension Setup
 
@@ -259,14 +293,69 @@ GET /
 
 ### Chrome Extension Configuration
 
+#### For HTTPS/SSL Setup
+Edit `chrome-extension/background.js` for production HTTPS endpoints:
+
+```javascript
+const SERVER_CONFIG = {
+    url: 'https://your-domain.com',  // Your HTTPS server URL
+    apiKey: 'your-secret-api-key-here'  // Your API key
+};
+```
+
+#### For Development/HTTP Setup
+For local development or HTTP-only setups:
+
+```javascript
+const SERVER_CONFIG = {
+    url: 'http://localhost:5000',  // Your HTTP server URL for development
+    apiKey: 'your-secret-api-key-here'  // Your API key
+};
+```
+
+#### Important SSL Considerations for Chrome Extension
+
+1. **Mixed Content Policy**: Chrome extensions can only communicate with HTTPS endpoints when loaded from HTTPS contexts
+2. **Self-Signed Certificates**: If using self-signed certificates, you may need to:
+   - Visit the HTTPS URL directly in browser and accept the certificate
+   - Add certificate exceptions in Chrome settings
+3. **CORS Configuration**: Ensure your server's CORS settings allow requests from Chrome extensions
+
+#### Testing Extension with SSL
+
+```bash
+# Test HTTPS endpoint accessibility
+curl -k https://your-domain.com/api/health
+
+# Check if extension can reach the server
+# Open Chrome DevTools on extension popup
+# Look for CORS or SSL errors in Console tab
+```
+
+#### Chrome Extension SSL Requirements
+
+The Chrome extension is pre-configured to work with HTTPS endpoints. Key considerations:
+
+1. **Default Configuration**: The extension uses `https://proxyconf.api.dashrdp.cloud` by default
+2. **HTTPS Only**: For security, Chrome extensions should only communicate with HTTPS endpoints in production
+3. **Certificate Trust**: Ensure your SSL certificate is properly trusted by the browser
+4. **CORS Headers**: The Nginx configuration includes proper CORS headers for Chrome extension communication
+
+#### Updating Extension for Your Domain
+
 Edit `chrome-extension/background.js`:
 
 ```javascript
 const SERVER_CONFIG = {
-    url: 'https://your-server.com',  // Your server URL
-    apiKey: 'your-secret-api-key-here'  // Your API key
+    url: 'https://your-domain.com',  // Update with your domain
+    apiKey: 'your-secret-api-key-here'  // Update with your API key
 };
 ```
+
+Then reload the extension in Chrome:
+1. Go to `chrome://extensions/`
+2. Find "DashRDP Proxy Configurator"
+3. Click the refresh icon
 
 ## 🔒 Security Features
 
@@ -296,6 +385,62 @@ const SERVER_CONFIG = {
    - Check proxy IP and port are correct
    - Ensure target machine can reach proxy server
 
+4. **SSL/HTTPS Issues**
+   - Certificate not trusted: Visit HTTPS URL directly and accept certificate
+   - Mixed content errors: Ensure all requests use HTTPS
+   - CORS errors: Check Nginx CORS configuration
+   - Extension can't connect: Verify certificate is valid and trusted
+
+### SSL Troubleshooting
+
+#### Common SSL Issues
+
+1. **Certificate Validation Errors**:
+   ```bash
+   # Check certificate details
+   openssl x509 -in server/ssl/cert.pem -text -noout
+   
+   # Verify certificate chain
+   openssl verify -CAfile server/ssl/cert.pem server/ssl/cert.pem
+   
+   # Test SSL connection
+   openssl s_client -connect your-domain.com:443 -servername your-domain.com
+   ```
+
+2. **Chrome Extension SSL Issues**:
+   ```bash
+   # Check extension console for SSL errors
+   # Chrome DevTools -> Extensions -> Inspect views: popup.html -> Console
+   
+   # Common fixes:
+   # 1. Visit https://your-domain.com directly and accept certificate
+   # 2. Check Chrome security settings
+   # 3. Verify CORS headers in network tab
+   ```
+
+3. **Let's Encrypt Certificate Renewal**:
+   ```bash
+   # Test renewal (dry run)
+   sudo certbot renew --dry-run
+   
+   # Force renewal
+   sudo certbot renew --force-renewal
+   
+   # Update certificates in Docker
+   sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem server/ssl/cert.pem
+   sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem server/ssl/key.pem
+   docker compose --profile production restart nginx
+   ```
+
+4. **Self-Signed Certificate Issues**:
+   ```bash
+   # Add certificate to system trust store (Ubuntu/Debian)
+   sudo cp server/ssl/cert.pem /usr/local/share/ca-certificates/proxy-manager.crt
+   sudo update-ca-certificates
+   
+   # For Chrome, visit https://your-domain.com and click "Advanced" -> "Proceed"
+   ```
+
 ### Debug Mode
 
 Enable debug logging:
@@ -308,6 +453,21 @@ Check Chrome extension console:
 ```bash
 # Open Chrome DevTools on extension popup
 # Check Console and Network tabs for errors
+# Look for CORS, SSL, or connection errors
+```
+
+Check Docker logs:
+```bash
+# View all service logs
+docker compose logs -f
+
+# View specific service logs
+docker compose logs -f proxy-manager
+docker compose logs -f nginx
+
+# Check Nginx access and error logs
+docker compose exec nginx tail -f /var/log/nginx/access.log
+docker compose exec nginx tail -f /var/log/nginx/error.log
 ```
 
 ## 📝 Development
@@ -359,28 +519,147 @@ DEBUG=false
 
 ### Docker Compose Services
 
-The `docker-compose.yml` includes two services:
+The `docker-compose.yml` includes multiple service configurations:
 
-1. **proxy-manager**: Main Flask application
-2. **nginx**: Reverse proxy (production profile only)
+1. **proxy-manager**: Main Flask application (production with Nginx)
+2. **nginx**: Reverse proxy with SSL termination (production profile only)
+3. **proxy-manager-dev**: Development version with direct port access
 
 #### Service Configuration
 
 ```yaml
-# Main application service
+# Main application service (production)
 proxy-manager:
-  - Runs on port 5000
-  - Includes health checks
-  - Auto-restarts unless stopped
+  - Runs on internal port 5000 (no external exposure)
+  - Includes health checks and auto-restart
   - Mounts logs directory for persistence
+  - Accessible only through Nginx reverse proxy
 
-# Nginx service (production only)
+# Nginx reverse proxy (production only)
 nginx:
-  - Runs on ports 80 and 443
-  - Provides SSL termination
-  - Load balancing and caching
+  - Runs on ports 80 (HTTP) and 443 (HTTPS)
+  - Provides SSL termination and security headers
+  - Rate limiting and CORS handling
   - Only starts with --profile production
+
+# Development service
+proxy-manager-dev:
+  - Direct port exposure on 5000
+  - Debug mode enabled
+  - Only starts with --profile development
 ```
+
+### Deployment Options
+
+#### Option 1: Development Mode (Direct Access)
+```bash
+cd server/
+
+# Start development service with direct port access
+docker compose --profile development up -d
+
+# Access at: http://localhost:5000
+```
+
+#### Option 2: Production Mode (Nginx + SSL)
+```bash
+cd server/
+
+# Start production services with Nginx reverse proxy
+docker compose --profile production up -d
+
+# Access at: https://your-domain.com
+```
+
+#### Option 3: Default Mode (No Profile)
+```bash
+cd server/
+
+# Start only the main proxy-manager service (no direct access)
+docker compose up -d
+
+# Service accessible internally only (for custom reverse proxy setups)
+```
+
+### SSL Certificate Setup
+
+#### Method 1: Using Let's Encrypt (Recommended)
+
+```bash
+# Install certbot
+sudo apt-get update
+sudo apt-get install certbot
+
+# Generate certificates for your domain
+sudo certbot certonly --standalone -d your-domain.com
+
+# Copy certificates to SSL directory
+sudo mkdir -p server/ssl
+sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem server/ssl/cert.pem
+sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem server/ssl/key.pem
+sudo chown -R $USER:$USER server/ssl/
+sudo chmod 644 server/ssl/cert.pem
+sudo chmod 600 server/ssl/key.pem
+```
+
+#### Method 2: Using CloudFlare Origin Certificates
+
+```bash
+# Create SSL directory
+mkdir -p server/ssl
+
+# Download CloudFlare origin certificate and key
+# Save as server/ssl/cert.pem and server/ssl/key.pem
+# Set proper permissions
+chmod 644 server/ssl/cert.pem
+chmod 600 server/ssl/key.pem
+```
+
+#### Method 3: Self-Signed Certificates (Development Only)
+
+```bash
+# Create SSL directory
+mkdir -p server/ssl
+
+# Generate self-signed certificate
+openssl req -x509 -newkey rsa:4096 -keyout server/ssl/key.pem -out server/ssl/cert.pem -days 365 -nodes \
+  -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+
+# Set proper permissions
+chmod 644 server/ssl/cert.pem
+chmod 600 server/ssl/key.pem
+```
+
+#### Method 4: Using the SSL Setup Script (Recommended)
+
+We've included an automated SSL setup script that handles all certificate methods:
+
+```bash
+# Navigate to server directory
+cd server/
+
+# Make script executable
+chmod +x ssl-setup.sh
+
+# For Let's Encrypt (recommended for production)
+./ssl-setup.sh --domain your-domain.com --email your-email@domain.com --method letsencrypt
+
+# For self-signed certificates (development)
+./ssl-setup.sh --domain localhost --method selfsigned
+
+# For CloudFlare origin certificates
+./ssl-setup.sh --domain your-domain.com --method cloudflare
+
+# View script help
+./ssl-setup.sh --help
+```
+
+The script will:
+- Generate or configure SSL certificates
+- Set proper file permissions
+- Update Nginx configuration with your domain
+- Create certificate renewal scripts (for Let's Encrypt)
+- Verify certificate validity
 
 ### Production Deployment Checklist
 
@@ -391,19 +670,23 @@ nginx:
    
    # Set restrictive permissions on env file
    chmod 600 .env
-   ```
-
-2. **SSL Certificate Setup** (for production with Nginx):
-   ```bash
-   # Create SSL directory
-   mkdir -p server/ssl
    
-   # Add your SSL certificates
-   cp your-domain.crt server/ssl/
-   cp your-domain.key server/ssl/
+   # Update API key in .env file
+   echo "API_KEY=$(openssl rand -hex 32)" >> .env
    ```
 
-3. **Firewall Configuration**:
+2. **Domain and DNS Configuration**:
+   ```bash
+   # Update Nginx configuration with your domain
+   sed -i 's/proxyconf.api.dashrdp.cloud/your-domain.com/g' server/nginx.conf
+   
+   # Ensure DNS A record points to your server IP
+   # your-domain.com -> YOUR_SERVER_IP
+   ```
+
+3. **SSL Certificate Setup** (choose one method above)
+
+4. **Firewall Configuration**:
    ```bash
    # Allow HTTP and HTTPS
    sudo ufw allow 80
@@ -411,12 +694,42 @@ nginx:
    
    # Block direct access to application port
    sudo ufw deny 5000
+   
+   # Enable firewall
+   sudo ufw enable
    ```
 
-4. **Start Production Services**:
+5. **Start Production Services**:
    ```bash
    cd server/
    docker compose --profile production up -d
+   
+   # Verify services are running
+   docker compose ps
+   
+   # Check logs
+   docker compose logs -f
+   ```
+
+6. **Generate DH Parameters** (for enhanced SSL security):
+   ```bash
+   # Generate strong DH parameters (this may take several minutes)
+   openssl dhparam -out server/ssl/dhparam.pem 2048
+   
+   # Set proper permissions
+   chmod 644 server/ssl/dhparam.pem
+   ```
+
+7. **Verify SSL Configuration**:
+   ```bash
+   # Test HTTPS endpoint
+   curl -I https://your-domain.com/api/health
+   
+   # Check SSL certificate
+   openssl s_client -connect your-domain.com:443 -servername your-domain.com
+   
+   # Test SSL rating (optional)
+   # Visit: https://www.ssllabs.com/ssltest/analyze.html?d=your-domain.com
    ```
 
 ### Container Health Monitoring
