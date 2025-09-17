@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Proxy Manager</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Remote Proxy Manager</h1>
+        
+        <form id="proxyForm">
+            <div class="form-group">
+                <label for="serverIp">Server IP:</label>
+                <input type="text" id="serverIp" name="serverIp" placeholder="Enter target server IP" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" placeholder="Enter Administrator password" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="proxyIpPort">Proxy IP:Port:</label>
+                <input type="text" id="proxyIpPort" name="proxyIpPort" placeholder="e.g., 192.168.1.100:8080" required>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" id="executeBtn">Execute Script</button>
+                <button type="button" id="extractBtn">Extract from Page</button>
+            </div>
+        </form>
+        
+        <div id="status" class="status hidden"></div>
+        
+        <div id="results" class="results hidden">
+            <h3>Results:</h3>
+            <div id="output"></div>
+        </div>
+        
+        <div class="extraction-help">
+            <h3>Auto-Extract Fields</h3>
+            <p>Click "Extract from Page" to automatically find and fill fields from the current webpage.</p>
+            <div class="field-mappings">
+                <small>
+                    • Server IP: Looks for IP addresses in input fields<br>
+                    • Password: Looks for password fields<br>
+                    • Proxy: Looks for proxy or IP:port combinations
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>

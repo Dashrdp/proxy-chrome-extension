@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Remote Proxy Manager",
+  "version": "1.0",
+  "description": "Extract server credentials and manage remote proxy settings",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "host_permissions"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Remote Proxy Manager"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["python_script.py"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
