@@ -43,7 +43,7 @@ docker-compose run --rm --entrypoint "sh /app/init-letsencrypt.sh" certbot
 
 ### 4. Start Production Services
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ## API Endpoints
@@ -81,12 +81,12 @@ The setup includes three main services:
 Check service status:
 ```bash
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Check individual service
-docker-compose logs -f nginx
-docker-compose logs -f proxy-manager
-docker-compose logs -f certbot
+docker compose logs -f nginx
+docker compose logs -f proxy-manager
+docker compose logs -f certbot
 ```
 
 ## Security Features
@@ -107,20 +107,20 @@ docker-compose logs -f certbot
 ### Service Issues
 ```bash
 # Restart services
-docker-compose restart
+docker compose restart
 
 # Rebuild if needed
-docker-compose up --build -d
+docker compose up --build -d
 ```
 
 ### Logs
 ```bash
 # Check all logs
-docker-compose logs
+docker compose logs
 
 # Check specific service
-docker-compose logs nginx
-docker-compose logs proxy-manager
+docker compose logs nginx
+docker compose logs proxy-manager
 ```
 
 ## Production Notes
