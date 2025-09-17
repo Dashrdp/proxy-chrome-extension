@@ -48,281 +48,8 @@ proxy-chrome-extension/
 ### Prerequisites
 - Python 3.8+
 - Chrome Browser
-- Docker and Docker Compose (for containerized deployment - see installation guide below)
+- Docker with Docker Compose plugin (for containerized deployment)
 - Windows target machines with PowerShell Remoting enabled
-
-### 0. Docker Installation Guide
-
-Before proceeding with the Docker deployment options, ensure Docker and Docker Compose are installed on your system.
-
-#### Docker Installation on Windows
-
-##### Option 1: Docker Desktop (Recommended for Windows 10/11)
-1. **Download Docker Desktop**:
-   ```bash
-   # Visit: https://docs.docker.com/desktop/install/windows/
-   # Or download directly from: https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe
-   ```
-
-2. **Install Docker Desktop**:
-   - Run the installer as Administrator
-   - Enable WSL 2 feature during installation
-   - Restart your computer when prompted
-
-3. **Verify Installation**:
-   ```bash
-   # Open PowerShell or Command Prompt
-   docker --version
-   docker-compose --version
-   
-   # Test Docker installation
-   docker run hello-world
-   ```
-
-##### Option 2: Docker via WSL 2 (Advanced Users)
-```bash
-# Enable WSL 2
-wsl --install
-
-# Install Ubuntu or your preferred Linux distribution
-wsl --install -d Ubuntu
-
-# Inside WSL 2, install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Add user to docker group
-sudo usermod -aG docker $USER
-
-# Install Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-```
-
-#### Docker Installation on macOS
-
-##### Option 1: Docker Desktop
-```bash
-# Download from: https://docs.docker.com/desktop/install/mac-install/
-# Or install via Homebrew
-brew install --cask docker
-
-# Start Docker Desktop from Applications
-# Verify installation
-docker --version
-docker-compose --version
-```
-
-##### Option 2: Using Homebrew
-```bash
-# Install Docker and Docker Compose
-brew install docker docker-compose
-
-# Install Docker Machine (if needed for older systems)
-brew install docker-machine
-```
-
-#### Docker Installation on Linux
-
-##### Ubuntu/Debian
-```bash
-# Update package index
-sudo apt-get update
-
-# Install required packages
-sudo apt-get install \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release
-
-# Add Docker's official GPG key
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-# Set up repository
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Install Docker Engine
-sudo apt-get update
-sudo apt-get install docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-# Add user to docker group
-sudo usermod -aG docker $USER
-
-# Install Docker Compose (standalone)
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
-# Start Docker service
-sudo systemctl start docker
-sudo systemctl enable docker
-```
-
-##### CentOS/RHEL/Fedora
-```bash
-# Install required packages
-sudo yum install -y yum-utils
-
-# Add Docker repository
-sudo yum-config-manager \
-    --add-repo \
-    https://download.docker.com/linux/centos/docker-ce.repo
-
-# Install Docker Engine
-sudo yum install docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-# Start Docker
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# Add user to docker group
-sudo usermod -aG docker $USER
-
-# Install Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-```
-
-##### Arch Linux
-```bash
-# Install Docker
-sudo pacman -S docker docker-compose
-
-# Start Docker service
-sudo systemctl start docker.service
-sudo systemctl enable docker.service
-
-# Add user to docker group
-sudo usermod -aG docker $USER
-```
-
-#### Post-Installation Steps
-
-1. **Verify Docker Installation**:
-   ```bash
-   # Check Docker version
-   docker --version
-   # Output: Docker version 24.0.6, build ed223bc
-   
-   # Check Docker Compose version
-   docker-compose --version
-   # Output: Docker Compose version v2.21.0
-   
-   # Test Docker functionality
-   docker run hello-world
-   ```
-
-2. **Configure Docker (Optional)**:
-   ```bash
-   # Configure Docker to start on boot (Linux)
-   sudo systemctl enable docker
-   
-   # Configure Docker daemon (create/edit /etc/docker/daemon.json)
-   sudo mkdir -p /etc/docker
-   echo '{
-     "log-driver": "json-file",
-     "log-opts": {
-       "max-size": "10m",
-       "max-file": "3"
-     }
-   }' | sudo tee /etc/docker/daemon.json
-   
-   # Restart Docker service
-   sudo systemctl restart docker
-   ```
-
-3. **Docker Group Configuration** (Linux/macOS):
-   ```bash
-   # Add current user to docker group (avoid using sudo)
-   sudo usermod -aG docker $USER
-   
-   # Apply group changes (logout and login, or run):
-   newgrp docker
-   
-   # Verify you can run docker without sudo
-   docker run hello-world
-   ```
-
-#### Troubleshooting Docker Installation
-
-##### Common Issues and Solutions
-
-1. **Permission Denied (Linux)**:
-   ```bash
-   # If you get permission denied errors
-   sudo usermod -aG docker $USER
-   newgrp docker
-   # Or logout and login again
-   ```
-
-2. **Docker Desktop Won't Start (Windows)**:
-   ```bash
-   # Enable virtualization in BIOS
-   # Enable Hyper-V and WSL 2 features
-   # Restart Windows
-   
-   # Check Windows features:
-   dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
-   dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
-   ```
-
-3. **WSL 2 Issues (Windows)**:
-   ```bash
-   # Update WSL 2
-   wsl --update
-   
-   # Set WSL 2 as default
-   wsl --set-default-version 2
-   
-   # Install WSL 2 kernel update
-   # Download from: https://aka.ms/wsl2kernel
-   ```
-
-4. **Docker Compose Command Not Found**:
-   ```bash
-   # For older Docker installations, use:
-   docker-compose --version
-   
-   # For newer Docker installations with compose plugin:
-   docker compose --version
-   
-   # If neither works, install Docker Compose manually:
-   sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-   sudo chmod +x /usr/local/bin/docker-compose
-   ```
-
-#### Useful Docker Commands for Beginners
-
-```bash
-# Basic Docker commands
-docker version          # Show Docker version
-docker info             # Display system information
-docker images           # List downloaded images
-docker ps               # List running containers
-docker ps -a            # List all containers
-
-# Container management
-docker start <container>    # Start a container
-docker stop <container>     # Stop a container
-docker restart <container>  # Restart a container
-docker rm <container>       # Remove a container
-docker logs <container>     # View container logs
-
-# Image management
-docker pull <image>         # Download an image
-docker rmi <image>          # Remove an image
-docker build -t <name> .    # Build image from Dockerfile
-
-# Docker Compose commands
-docker-compose up           # Start services
-docker-compose up -d        # Start services in background
-docker-compose down         # Stop services
-docker-compose logs         # View logs
-docker-compose ps           # List services
-```
 
 ### 1. Chrome Extension Setup
 
@@ -374,13 +101,13 @@ nano .env
 # Set: API_KEY=your-secret-api-key-here
 
 # Start the server (development mode)
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop the server
-docker-compose down
+docker compose down
 ```
 
 ##### B2. Production Docker Deployment with Nginx
@@ -398,17 +125,17 @@ nano .env
 # DEBUG=false
 
 # Start production setup with Nginx reverse proxy
-docker-compose --profile production up -d
+docker compose --profile production up -d
 
 # Check status
-docker-compose ps
+docker compose ps
 
 # View all logs
-docker-compose logs -f
+docker compose logs -f
 
 # View specific service logs
-docker-compose logs -f proxy-manager
-docker-compose logs -f nginx
+docker compose logs -f proxy-manager
+docker compose logs -f nginx
 ```
 
 ##### B3. Manual Docker Build and Run
@@ -446,24 +173,24 @@ docker rm proxy-manager
 ##### B4. Docker Management Commands
 ```bash
 # Check running containers
-docker-compose ps
+docker compose ps
 
 # Restart services
-docker-compose restart
+docker compose restart
 
 # Update and rebuild
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 
 # View real-time logs
-docker-compose logs -f proxy-manager
+docker compose logs -f proxy-manager
 
 # Access container shell (for debugging)
-docker-compose exec proxy-manager bash
+docker compose exec proxy-manager bash
 
 # Clean up everything
-docker-compose down -v --remove-orphans
+docker compose down -v --remove-orphans
 docker system prune -f
 ```
 
@@ -689,14 +416,14 @@ nginx:
 4. **Start Production Services**:
    ```bash
    cd server/
-   docker-compose --profile production up -d
+   docker compose --profile production up -d
    ```
 
 ### Container Health Monitoring
 
 ```bash
 # Check container health
-docker-compose ps
+docker compose ps
 
 # Health check endpoint
 curl http://localhost:5000/api/health
@@ -705,7 +432,7 @@ curl http://localhost:5000/api/health
 docker stats
 
 # Service-specific health
-docker-compose exec proxy-manager curl http://localhost:5000/api/health
+docker compose exec proxy-manager curl http://localhost:5000/api/health
 ```
 
 ### Backup and Maintenance
@@ -715,12 +442,12 @@ docker-compose exec proxy-manager curl http://localhost:5000/api/health
 tar -czf backup-$(date +%Y%m%d).tar.gz server/logs/
 
 # Update containers
-docker-compose pull
-docker-compose down
-docker-compose up -d
+docker compose pull
+docker compose down
+docker compose up -d
 
 # Database backup (if using external DB)
-# docker-compose exec postgres pg_dump -U user dbname > backup.sql
+# docker compose exec postgres pg_dump -U user dbname > backup.sql
 ```
 
 ### Docker Troubleshooting
@@ -748,13 +475,13 @@ docker-compose up -d
 3. **Container Won't Start**:
    ```bash
    # Check container logs
-   docker-compose logs proxy-manager
+   docker compose logs proxy-manager
    
    # Inspect container configuration
-   docker-compose config
+   docker compose config
    
    # Validate environment variables
-   docker-compose exec proxy-manager env
+   docker compose exec proxy-manager env
    ```
 
 4. **Network Issues**:
@@ -766,7 +493,7 @@ docker-compose up -d
    docker network inspect server_default
    
    # Test connectivity between containers
-   docker-compose exec proxy-manager ping nginx
+   docker compose exec proxy-manager ping nginx
    ```
 
 #### Performance Tuning
@@ -789,10 +516,10 @@ services:
 
 ```bash
 # Update to latest images
-docker-compose pull
+docker compose pull
 
 # Recreate containers with new images
-docker-compose up -d --force-recreate
+docker compose up -d --force-recreate
 
 # Remove old images
 docker image prune -f
