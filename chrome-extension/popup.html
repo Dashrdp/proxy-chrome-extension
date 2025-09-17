@@ -2,33 +2,73 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remote Proxy Manager</title>
+    <meta name="viewport" content="width=400, initial-scale=1.0">
+    <title>DashRDP Proxy Configurator</title>
     <link rel="stylesheet" href="popup.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <h1>Remote Proxy Manager</h1>
+        <div class="header">
+            <div class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V7C21 5.89543 20.1046 5 19 5H5C3.89543 5 3 5.89543 3 7Z" stroke="currentColor" stroke-width="2"/>
+                    <path d="M3 7L12 13L21 7" stroke="currentColor" stroke-width="2"/>
+                </svg>
+            </div>
+            <h1>DashRDP Proxy Configurator</h1>
+        </div>
         
         <form id="proxyForm">
-            <div class="form-group">
-                <label for="serverIp">Server IP:</label>
-                <input type="text" id="serverIp" name="serverIp" placeholder="Enter target server IP" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="password">Password:</label>
-                <input type="password" id="password" name="password" placeholder="Enter Administrator password" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="proxyIpPort">Proxy IP:Port:</label>
-                <input type="text" id="proxyIpPort" name="proxyIpPort" placeholder="e.g., 192.168.1.100:8080" required>
+            <div class="form-section">
+                <div class="form-group">
+                    <label for="serverIp">
+                        <span class="label-icon">🖥️</span>
+                        Server IP
+                    </label>
+                    <div class="input-wrapper">
+                        <input type="text" id="serverIp" name="serverIp" placeholder="66.181.39.100" required>
+                        <div class="input-border"></div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">
+                        <span class="label-icon">🔐</span>
+                        Password
+                    </label>
+                    <div class="input-wrapper">
+                        <input type="password" id="password" name="password" placeholder="••••••••" required>
+                        <button type="button" class="password-toggle" id="passwordToggle" title="Toggle password visibility">
+                            <span class="toggle-icon">👁️</span>
+                        </button>
+                        <div class="input-border"></div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="proxyIpPort">
+                        <span class="label-icon">🌐</span>
+                        Proxy IP:Port
+                    </label>
+                    <div class="input-wrapper">
+                        <input type="text" id="proxyIpPort" name="proxyIpPort" placeholder="e.g., 192.168.1.100:8080" required>
+                        <div class="input-border"></div>
+                    </div>
+                </div>
             </div>
             
             <div class="form-actions">
-                <button type="submit" id="executeBtn">Execute Script</button>
-                <button type="button" id="extractBtn">Extract from Page</button>
+                <button type="submit" id="executeBtn" class="btn-primary">
+                    <span class="btn-icon">⚡</span>
+                    EXECUTE SCRIPT
+                </button>
+                <button type="button" id="extractBtn" class="btn-secondary">
+                    <span class="btn-icon">📤</span>
+                    EXTRACT FROM PAGE
+                </button>
             </div>
         </form>
         
@@ -39,15 +79,27 @@
             <div id="output"></div>
         </div>
         
-        <div class="extraction-help">
-            <h3>Auto-Extract Fields</h3>
-            <p>Click "Extract from Page" to automatically find and fill fields from the current webpage.</p>
-            <div class="field-mappings">
-                <small>
-                    • Server IP: Looks for IP addresses in input fields<br>
-                    • Password: Looks for password fields<br>
-                    • Proxy: Looks for proxy or IP:port combinations
-                </small>
+        <div class="info-panel">
+            <div class="info-header">
+                <span class="info-icon">ℹ️</span>
+                <h3>Auto-Extract Configuration</h3>
+            </div>
+            <div class="info-content">
+                <p>Automatically detects and extracts proxy configuration from the current webpage.</p>
+                <div class="field-mappings">
+                    <div class="mapping-item">
+                        <span class="mapping-dot"></span>
+                        <span>Server IP: Target server addresses</span>
+                    </div>
+                    <div class="mapping-item">
+                        <span class="mapping-dot"></span>
+                        <span>Password: Administrator credentials</span>
+                    </div>
+                    <div class="mapping-item">
+                        <span class="mapping-dot"></span>
+                        <span>Proxy: IP:Port combinations (customfield[390] & [391])</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

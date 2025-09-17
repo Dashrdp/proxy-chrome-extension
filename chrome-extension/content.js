@@ -1,10 +1,16 @@
 // Content script for extracting fields from web pages
+console.log('DashRDP Proxy Configurator content script loaded');
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('Content script received message:', message);
+    
     if (message.action === 'extractFields') {
         try {
             const extractedData = extractFieldsFromPage();
+            console.log('Extraction result:', extractedData);
             sendResponse({ success: true, data: extractedData });
         } catch (error) {
+            console.error('Extraction error:', error);
             sendResponse({ success: false, error: error.message });
         }
     }
@@ -12,6 +18,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 function extractFieldsFromPage() {
+    console.log('=== Starting field extraction ===');
+    console.log('Page URL:', window.location.href);
+    console.log('Page title:', document.title);
+    
+    // Debug: Show all input fields on the page
+    debugShowAllInputs();
+    
     const result = {
         serverIp: null,
         password: null,
@@ -27,10 +40,29 @@ function extractFieldsFromPage() {
     // Extract proxy IP:Port
     result.proxyIpPort = findProxyIpPort();
 
+    console.log('=== Final extraction result ===', result);
     return result;
 }
 
+function debugShowAllInputs() {
+    console.log('=== Debug: All input fields on page ===');
+    const allInputs = document.querySelectorAll('input');
+    console.log('Total inputs found:', allInputs.length);
+    
+    allInputs.forEach((input, index) => {
+        console.log(`Input ${index + 1}:`, {
+            type: input.type,
+            name: input.name,
+            id: input.id,
+            value: input.value ? (input.type === 'password' ? '***' : input.value) : '',
+            placeholder: input.placeholder,
+            className: input.className
+        });
+    });
+}
+
 function findServerIP() {
+    console.log('Looking for server IP...');
     // Look for IP addresses in various contexts
     const ipRegex = /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/g;
     
@@ -64,8 +96,10 @@ function findServerIP() {
 }
 
 function findPassword() {
+    console.log('Looking for password fields...');
     // Look for password fields
     const passwordInputs = document.querySelectorAll('input[type="password"]');
+    console.log('Found password inputs:', passwordInputs.length);
     if (passwordInputs.length > 0) {
         // Return the value of the first password field that has content
         for (const input of passwordInputs) {
@@ -90,6 +124,29 @@ function findPassword() {
 }
 
 function findProxyIpPort() {
+    console.log('Looking for proxy IP and port fields...');
+    
+    // First, try to find the specific proxy IP and port fields you mentioned
+    const proxyIpField = document.querySelector('input[name="customfield[390]"], #customfield390');
+    const proxyPortField = document.querySelector('input[name="customfield[391]"], #customfield391');
+    
+    console.log('Found proxy IP field:', proxyIpField);
+    console.log('Found proxy PORT field:', proxyPortField);
+    
+    if (proxyIpField && proxyPortField) {
+        const ip = proxyIpField.value.trim();
+        const port = proxyPortField.value.trim();
+        
+        console.log('Proxy IP value:', ip);
+        console.log('Proxy PORT value:', port);
+        
+        if (ip && port) {
+            console.log('Successfully extracted proxy:', `${ip}:${port}`);
+            return `${ip}:${port}`;
+        }
+    }
+    
+    // Fallback to original logic for other proxy field formats
     const proxyRegex = /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):\d{1,5}\b/g;
     
     // Check input fields

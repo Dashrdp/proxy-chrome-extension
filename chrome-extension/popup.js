@@ -5,9 +5,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const status = document.getElementById('status');
     const results = document.getElementById('results');
     const output = document.getElementById('output');
+    const passwordToggle = document.getElementById('passwordToggle');
+    const passwordInput = document.getElementById('password');
 
     // Load saved data
     loadSavedData();
+
+    // Password toggle functionality
+    passwordToggle.addEventListener('click', function() {
+        togglePasswordVisibility();
+    });
 
     // Form submission handler
     form.addEventListener('submit', function(e) {
@@ -83,13 +90,48 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get active tab
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             
+            if (!tab || !tab.id) {
+                throw new Error('No active tab found');
+            }
+
+            // Check if we can access the tab
+            if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || 
+                tab.url.startsWith('edge://') || tab.url.startsWith('about:') || 
+                tab.url.startsWith('moz-extension://')) {
+                throw new Error('Cannot access browser internal pages');
+            }
+
+            console.log('Attempting to extract from tab:', tab.url);
+            
+            // First, try to inject the content script if it's not already injected
+            try {
+                await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    files: ['content.js']
+                });
+            } catch (injectionError) {
+                console.log('Content script may already be injected:', injectionError.message);
+                // This is okay, the script might already be injected
+            }
+
+            // Wait a moment for the script to be ready
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             // Execute content script to extract fields
             const response = await chrome.tabs.sendMessage(tab.id, {
                 action: 'extractFields'
             });
 
+            console.log('Content script response:', response);
+
             if (response && response.success) {
                 const { serverIp, password, proxyIpPort } = response.data;
+                
+                console.log('Extracted data:', { 
+                    serverIp, 
+                    password: password ? '***' : null, 
+                    proxyIpPort 
+                });
                 
                 if (serverIp) document.getElementById('serverIp').value = serverIp;
                 if (password) document.getElementById('password').value = password;
@@ -98,12 +140,31 @@ document.addEventListener('DOMContentLoaded', function() {
                 saveData();
                 
                 const extractedCount = [serverIp, password, proxyIpPort].filter(Boolean).length;
-                showStatus(`Extracted ${extractedCount} field(s) from page`, 'success');
+                if (extractedCount > 0) {
+                    showStatus(`Extracted ${extractedCount} field(s) from page`, 'success');
+                } else {
+                    showStatus('No data found in the expected fields', 'error');
+                }
             } else {
-                showStatus('No suitable fields found on this page', 'error');
+                const errorMsg = response?.error || 'No suitable fields found on this page';
+                showStatus(errorMsg, 'error');
+                console.log('Extraction failed:', errorMsg);
             }
         } catch (error) {
-            showStatus('Could not extract fields from this page', 'error');
+            console.error('Extract error:', error);
+            let errorMessage = 'Could not extract fields from this page';
+            
+            if (error.message.includes('chrome://')) {
+                errorMessage = 'Cannot extract from browser internal pages';
+            } else if (error.message.includes('Receiving end does not exist')) {
+                errorMessage = 'Page needs to be refreshed. Please reload and try again.';
+            } else if (error.message.includes('No active tab')) {
+                errorMessage = 'No active tab found';
+            } else if (error.message.includes('Cannot access')) {
+                errorMessage = error.message;
+            }
+            
+            showStatus(errorMessage, 'error');
         } finally {
             extractBtn.disabled = false;
         }
@@ -156,5 +217,19 @@ document.addEventListener('DOMContentLoaded', function() {
     function isValidProxyFormat(proxy) {
         const proxyRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):\d{1,5}$/;
         return proxyRegex.test(proxy);
+    }
+
+    function togglePasswordVisibility() {
+        const toggleIcon = passwordToggle.querySelector('.toggle-icon');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleIcon.textContent = '🙈'; // Hide eye
+            passwordToggle.title = 'Hide password';
+        } else {
+            passwordInput.type = 'password';
+            toggleIcon.textContent = '👁️'; // Show eye
+            passwordToggle.title = 'Show password';
+        }
     }
 });
