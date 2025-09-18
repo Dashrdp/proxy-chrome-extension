@@ -6,13 +6,13 @@
 set -e
 
 DOMAIN="proxyconf.api.dashrdp.cloud"
-EMAIL="dashrdp@gmail.com"
+EMAIL="admin@dashrdp.cloud"
 
 echo "🔐 Setting up SSL certificates for $DOMAIN"
 
 # Create necessary directories
-mkdir -p /var/www/certbot
-mkdir -p /etc/letsencrypt
+sudo mkdir -p /var/www/certbot
+sudo mkdir -p /etc/letsencrypt
 
 # Check if domain is pointing to this server
 echo "🌐 Checking if domain $DOMAIN points to this server..."
@@ -28,9 +28,18 @@ fi
 
 echo "✅ Domain $DOMAIN correctly points to this server ($PUBLIC_IP)"
 
+# Check if docker compose is available
+if ! docker compose version &> /dev/null; then
+    echo "❌ docker compose command not found. Please install Docker Compose V2."
+    echo "   Install instructions: https://docs.docker.com/compose/install/"
+    exit 1
+fi
+
+echo "✅ docker compose is available"
+
 # Start nginx without SSL first
 echo "🚀 Starting nginx for initial certificate request..."
-docker-compose up -d nginx
+docker compose up -d nginx
 
 # Wait for nginx to be ready
 echo "⏳ Waiting for nginx to be ready..."
@@ -38,7 +47,7 @@ sleep 10
 
 # Request SSL certificate
 echo "📜 Requesting SSL certificate from Let's Encrypt..."
-docker-compose run --rm certbot
+docker compose run --rm certbot
 
 # Update nginx configuration to use SSL
 echo "🔄 Updating nginx configuration for SSL..."
@@ -46,11 +55,11 @@ echo "🔄 Updating nginx configuration for SSL..."
 
 # Restart nginx with SSL
 echo "🔄 Restarting nginx with SSL configuration..."
-docker-compose restart nginx
+docker compose restart nginx
 
 # Start all services
 echo "🚀 Starting all services..."
-docker-compose up -d
+docker compose up -d
 
 # Check if everything is working
 echo "🔍 Checking if services are running..."
@@ -62,12 +71,12 @@ if curl -f -s https://$DOMAIN/api/health > /dev/null; then
     echo "🔗 Health check: https://$DOMAIN/api/health"
 else
     echo "❌ SSL setup completed but API is not responding"
-    echo "🔍 Check logs with: docker-compose logs"
+    echo "🔍 Check logs with: docker compose logs"
 fi
 
 echo ""
 echo "📋 Next steps:"
 echo "1. Update your Chrome extension to use: https://$DOMAIN"
 echo "2. Set your API key in both the extension and backend"
-echo "3. Monitor logs: docker-compose logs -f"
+echo "3. Monitor logs: docker compose logs -f"
 echo "4. SSL certificates will auto-renew every 12 hours"
