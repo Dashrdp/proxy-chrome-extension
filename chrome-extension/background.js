@@ -1,8 +1,8 @@
 // Background script for handling Python script execution
 // Configuration
 const SERVER_CONFIG = {
-    // Change these values to point to your hosted server
-    url: 'https://proxyconf.api.dashrdp.cloud',  // Replace with your server URL, e.g., 'https://your-server.com'
+    // Production server configuration
+    url: 'https://proxyconf.api.dashrdp.cloud',  // Production server URL
     apiKey: 'your-secret-api-key-here'  // Replace with your actual API key
 };
 

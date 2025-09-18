@@ -1,16 +1,4 @@
-# Production Server Requirements for Remote Proxy Manager
-
-# Core dependencies
-Flask>=2.3.0
-flask-cors>=4.0.0
-pypsrp>=0.8.0
-
-# Production server
-gunicorn>=21.0.0
-waitress>=2.1.0
-
-# Security and monitoring
-python-dotenv>=1.0.0
-
-# Optional: For enhanced logging and monitoring
-
+Flask==2.3.3
+pypsrp==0.7.0
+requests==2.31.0
+gunicorn==21.2.0
