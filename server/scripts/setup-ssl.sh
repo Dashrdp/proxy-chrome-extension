@@ -37,13 +37,28 @@ fi
 
 echo "✅ docker compose is available"
 
+# Create webroot directory
+echo "📁 Creating webroot directory..."
+sudo mkdir -p /var/www/certbot
+
 # Start nginx without SSL first
 echo "🚀 Starting nginx for initial certificate request..."
 docker compose up -d nginx
 
 # Wait for nginx to be ready
 echo "⏳ Waiting for nginx to be ready..."
-sleep 10
+sleep 15
+
+# Test if nginx is serving the challenge directory
+echo "🔍 Testing nginx challenge directory..."
+if curl -f -s http://$DOMAIN/.well-known/acme-challenge/ > /dev/null; then
+    echo "✅ Nginx is serving challenge directory"
+else
+    echo "❌ Nginx is not serving challenge directory properly"
+    echo "🔍 Checking nginx logs..."
+    docker compose logs nginx
+    exit 1
+fi
 
 # Request SSL certificate
 echo "📜 Requesting SSL certificate from Let's Encrypt..."
