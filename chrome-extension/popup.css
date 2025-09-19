@@ -88,6 +88,11 @@ body::before {
     height: 14px;
 }
 
+.dashrdp-logo {
+    width: 20px !important;
+    height: 20px !important;
+}
+
 .header-left {
     display: flex;
     align-items: center;
