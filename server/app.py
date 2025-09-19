@@ -101,6 +101,11 @@ def execute_script():
     Simplified version without API validation for initial setup
     """
     try:
+        # Debug logging to track requests
+        logger.info("=== NEW REQUEST RECEIVED ===")
+        logger.info(f"Request method: {request.method}")
+        logger.info(f"Request headers: {dict(request.headers)}")
+        logger.info("=== NO API VALIDATION - DIRECT PROCESSING ===")
 
         # Get JSON data from request
         data = request.get_json()
@@ -165,7 +170,29 @@ Target IP: {result['target_ip']}
 Proxy: {result['proxy']}
 Status: {result['status']}"""
 
-# Removed verify-access endpoint for simplicity
+# Simple test endpoint to verify no API validation
+@app.route('/api/test', methods=['POST'])
+def test_endpoint():
+    """
+    Simple test endpoint to verify the server works without API keys
+    """
+    try:
+        logger.info("=== TEST ENDPOINT CALLED ===")
+        data = request.get_json()
+        logger.info(f"Test data received: {data}")
+        
+        return jsonify({
+            "success": True,
+            "message": "Server is working! No API keys required.",
+            "received_data": data,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Test endpoint error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

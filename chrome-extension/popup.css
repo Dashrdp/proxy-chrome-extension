@@ -646,6 +646,122 @@ input[type=number] {
     }
 }
 
+/* Progress Bar Styles */
+.progress-container {
+    margin: 0 20px 16px 20px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.progress-header span {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+#progressMessage {
+    color: #ffffff;
+}
+
+#progressPercentage {
+    color: #3b82f6;
+    font-weight: 600;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    opacity: 0.5;
+    transition: opacity 0.3s ease;
+}
+
+.progress-step.active {
+    opacity: 1;
+}
+
+.progress-step.completed {
+    opacity: 1;
+}
+
+.step-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 4px;
+    transition: all 0.3s ease;
+}
+
+.progress-step.active .step-icon {
+    background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+    border-color: #3b82f6;
+    color: #ffffff;
+    transform: scale(1.1);
+}
+
+.progress-step.completed .step-icon {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    border-color: #22c55e;
+    color: #ffffff;
+}
+
+.step-label {
+    font-size: 8px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: center;
+}
+
+.progress-step.active .step-label {
+    color: #3b82f6;
+    font-weight: 600;
+}
+
+.progress-step.completed .step-label {
+    color: #22c55e;
+}
+
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
     * {

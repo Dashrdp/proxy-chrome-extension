@@ -9,10 +9,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const passwordInput = document.getElementById('password');
     const healthStatus = document.getElementById('healthStatus');
     const healthText = document.getElementById('healthText');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressMessage = document.getElementById('progressMessage');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const progressFill = document.getElementById('progressFill');
 
     // Clear old data and start fresh
     clearOldData();
     checkAPIHealth();
+    
+    // Listen for progress updates from background script
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === 'progressUpdate') {
+            updateProgress(message.progress);
+        }
+    });
 
     // Password toggle functionality
     passwordToggle.addEventListener('click', function() {
@@ -64,8 +75,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         executeBtn.disabled = true;
-        showStatus('Executing script...', 'loading');
+        hideStatus();
         hideResults();
+        showProgress();
 
         try {
             // Send message to background script
@@ -75,12 +87,15 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (response.success) {
+                hideProgress();
                 showStatus('Script executed successfully', 'success');
                 showResults(response.result);
             } else {
+                hideProgress();
                 showStatus(`Error: ${response.error}`, 'error');
             }
         } catch (error) {
+            hideProgress();
             showStatus(`Connection error: ${error.message}`, 'error');
         } finally {
             executeBtn.disabled = false;
@@ -221,6 +236,66 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function hideStatus() {
         status.classList.add('hidden');
+    }
+    
+    function showProgress() {
+        progressContainer.classList.remove('hidden');
+        resetProgress();
+    }
+    
+    function hideProgress() {
+        progressContainer.classList.add('hidden');
+    }
+    
+    function resetProgress() {
+        progressMessage.textContent = 'Initializing...';
+        progressPercentage.textContent = '0%';
+        progressFill.style.width = '0%';
+        
+        // Reset all steps
+        const steps = document.querySelectorAll('.progress-step');
+        steps.forEach(step => {
+            step.classList.remove('active', 'completed');
+        });
+    }
+    
+    function updateProgress(progress) {
+        const { step, message, percentage } = progress;
+        
+        // Update progress bar
+        progressMessage.textContent = message;
+        progressPercentage.textContent = `${percentage}%`;
+        progressFill.style.width = `${percentage}%`;
+        
+        // Update step indicators
+        const steps = document.querySelectorAll('.progress-step');
+        
+        if (step === -1) {
+            // Error state
+            steps.forEach(s => s.classList.remove('active', 'completed'));
+            if (steps[0]) steps[0].classList.add('active');
+            progressFill.style.background = 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)';
+        } else {
+            // Normal progress
+            progressFill.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
+            
+            steps.forEach((stepElement, index) => {
+                const stepNumber = index + 1;
+                
+                if (stepNumber < step) {
+                    // Completed steps
+                    stepElement.classList.remove('active');
+                    stepElement.classList.add('completed');
+                } else if (stepNumber === step) {
+                    // Current step
+                    stepElement.classList.remove('completed');
+                    stepElement.classList.add('active');
+                } else {
+                    // Future steps
+                    stepElement.classList.remove('active', 'completed');
+                }
+            });
+        }
     }
 
     function saveData() {

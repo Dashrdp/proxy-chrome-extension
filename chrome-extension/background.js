@@ -9,7 +9,15 @@ const SERVER_CONFIG = {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'executeScript') {
-        executeRemoteProxyScript(message.data)
+        executeRemoteProxyScript(message.data, (progress) => {
+            // Send progress updates to popup
+            chrome.runtime.sendMessage({
+                action: 'progressUpdate',
+                progress: progress
+            }).catch(() => {
+                // Popup might be closed, that's ok
+            });
+        })
             .then(result => {
                 sendResponse({ success: true, result: result });
             })
@@ -29,15 +37,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
-async function executeRemoteProxyScript(data) {
+async function executeRemoteProxyScript(data, progressCallback) {
     const { serverIp, password, proxyIpPort } = data;
     
     try {
+        // Send progress updates
+        if (progressCallback) {
+            progressCallback({ step: 1, message: 'Validating input data...', percentage: 10 });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            progressCallback({ step: 2, message: 'Connecting to server...', percentage: 30 });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            progressCallback({ step: 3, message: 'Executing proxy configuration...', percentage: 60 });
+        }
+        
         // Use simple remote server execution
-        const result = await executeViaRemoteServer(data);
+        const result = await executeViaRemoteServer(data, progressCallback);
+        
+        if (progressCallback) {
+            progressCallback({ step: 4, message: 'Processing results...', percentage: 90 });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            progressCallback({ step: 5, message: 'Complete!', percentage: 100 });
+        }
+        
         return result;
         
     } catch (error) {
+        if (progressCallback) {
+            progressCallback({ step: -1, message: 'Error: ' + error.message, percentage: 0 });
+        }
         throw new Error(`Script execution failed: ${error.message}`);
     }
 }
@@ -115,11 +145,20 @@ async function executeViaNativeMessaging(data) {
 
 // Removed complex API access verification for simplicity
 
-// Simple remote server execution
-async function executeViaRemoteServer(data) {
+// Simple remote server execution with progress tracking
+async function executeViaRemoteServer(data, progressCallback) {
     try {
+        console.log('=== CHROME EXTENSION DEBUG ===');
         console.log('Making request to server:', SERVER_CONFIG.url);
         console.log('Request data:', data);
+        console.log('Headers being sent:', {
+            'Content-Type': 'application/json'
+        });
+        console.log('=== NO API KEYS - CLEAN REQUEST ===');
+        
+        if (progressCallback) {
+            progressCallback({ step: 3, message: 'Sending request to server...', percentage: 65 });
+        }
         
         const response = await fetch(`${SERVER_CONFIG.url}/api/execute-script`, {
             method: 'POST',
@@ -129,15 +168,27 @@ async function executeViaRemoteServer(data) {
             body: JSON.stringify(data)
         });
         
+        if (progressCallback) {
+            progressCallback({ step: 3, message: 'Receiving response from server...', percentage: 80 });
+        }
+        
         const responseData = await response.json();
         
+        console.log('=== SERVER RESPONSE DEBUG ===');
+        console.log('Response status:', response.status);
+        console.log('Response data:', responseData);
+        
         if (!response.ok) {
+            console.error('Server returned error status:', response.status);
+            console.error('Error response:', responseData);
             throw new Error(responseData.error || `Server error: ${response.status}`);
         }
         
         if (responseData.success) {
+            console.log('Success! Response result:', responseData.result);
             return responseData.result;
         } else {
+            console.error('Server reported failure:', responseData.error);
             throw new Error(responseData.error || 'Unknown server error');
         }
     } catch (error) {

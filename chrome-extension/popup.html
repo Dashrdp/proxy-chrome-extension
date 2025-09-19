@@ -82,6 +82,39 @@
         
         <div id="status" class="status hidden"></div>
         
+        <!-- Progress Bar -->
+        <div id="progressContainer" class="progress-container hidden">
+            <div class="progress-header">
+                <span id="progressMessage">Initializing...</span>
+                <span id="progressPercentage">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <div id="progressSteps" class="progress-steps">
+                <div class="progress-step" data-step="1">
+                    <div class="step-icon">1</div>
+                    <div class="step-label">Validate</div>
+                </div>
+                <div class="progress-step" data-step="2">
+                    <div class="step-icon">2</div>
+                    <div class="step-label">Connect</div>
+                </div>
+                <div class="progress-step" data-step="3">
+                    <div class="step-icon">3</div>
+                    <div class="step-label">Execute</div>
+                </div>
+                <div class="progress-step" data-step="4">
+                    <div class="step-icon">4</div>
+                    <div class="step-label">Process</div>
+                </div>
+                <div class="progress-step" data-step="5">
+                    <div class="step-icon">5</div>
+                    <div class="step-label">Complete</div>
+                </div>
+            </div>
+        </div>
+        
         <div id="results" class="results hidden">
             <h3>Results:</h3>
             <div id="output"></div>
