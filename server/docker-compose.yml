@@ -21,55 +21,38 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Nginx Reverse Proxy
-  nginx:
-    image: nginx:1.24-alpine
-    container_name: proxy-nginx
+  # Caddy Reverse Proxy with Automatic SSL
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: proxy-caddy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
+      - "443:443/udp"  # For HTTP/3 support
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-      - /var/www/certbot:/var/www/certbot
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - /var/log/caddy:/var/log/caddy
     depends_on:
       - proxy-api
     networks:
       - proxy-network
+    environment:
+      - CADDY_AGREE_TOS=yes
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  # Certbot for SSL certificates
-  certbot:
-    image: certbot/certbot
-    container_name: proxy-certbot
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt
-      - /var/www/certbot:/var/www/certbot
-    command: certonly --webroot --webroot-path=/var/www/certbot --email admin@dashrdp.cloud --agree-tos --no-eff-email -d proxyconf.api.dashrdp.cloud
-    networks:
-      - proxy-network
-
-  # SSL Certificate Renewal (runs daily)
-  certbot-renew:
-    image: certbot/certbot
-    container_name: proxy-certbot-renew
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt
-      - /var/www/certbot:/var/www/certbot
-    command: sh -c "trap exit TERM; while :; do certbot renew --webroot --webroot-path=/var/www/certbot; sleep 12h & wait $${!}; done;"
-    restart: unless-stopped
-    networks:
-      - proxy-network
-
 networks:
   proxy-network:
     driver: bridge
 
 volumes:
-  certbot-certs:
-  certbot-www:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local

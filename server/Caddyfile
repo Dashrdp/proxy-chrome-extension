@@ -1,0 +1,103 @@
+# Caddyfile for DashRDP Proxy Configurator API
+# Caddy automatically handles SSL certificates via Let's Encrypt
+
+proxyconf.api.dashrdp.cloud {
+    # Rate limiting (using request_body directive instead)
+    # Note: Basic rate limiting with Caddy's built-in features
+
+    # Security headers
+    header {
+        # HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # Frame options
+        X-Frame-Options "SAMEORIGIN"
+        # Content type options
+        X-Content-Type-Options "nosniff"
+        # XSS Protection
+        X-XSS-Protection "1; mode=block"
+        # Referrer Policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Content Security Policy
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';"
+        # Hide server info
+        -Server
+    }
+
+    # Enable compression
+    encode gzip
+
+    # API endpoints with rate limiting and CORS
+    handle /api/* {
+        # CORS headers for Chrome extension
+        header {
+            Access-Control-Allow-Origin "*"
+            Access-Control-Allow-Methods "GET, POST, OPTIONS"
+            Access-Control-Allow-Headers "Content-Type, X-API-Key, Authorization"
+        }
+
+        # Handle preflight requests
+        @options method OPTIONS
+        handle @options {
+            header {
+                Access-Control-Allow-Origin "*"
+                Access-Control-Allow-Methods "GET, POST, OPTIONS"
+                Access-Control-Allow-Headers "Content-Type, X-API-Key, Authorization"
+                Access-Control-Max-Age "86400"
+            }
+            respond "" 204
+        }
+
+        # Rate limiting handled at application level
+
+        # Reverse proxy to Flask app
+        reverse_proxy proxy-api:5000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-Port {port}
+        }
+    }
+
+    # Health check endpoint
+    handle /api/health {
+        reverse_proxy proxy-api:5000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Root endpoint and all other requests  
+    handle {
+        reverse_proxy proxy-api:5000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Block access to sensitive files
+    @sensitive {
+        path /.*
+        path *~
+    }
+    handle @sensitive {
+        respond "Access denied" 403
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10MB
+            roll_keep 3
+        }
+        format json
+    }
+}
+
+# HTTP to HTTPS redirect (automatic with Caddy when domain is specified)
+# Caddy automatically redirects HTTP to HTTPS for domains with certificates

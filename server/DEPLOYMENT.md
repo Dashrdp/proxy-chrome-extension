@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-Complete guide for deploying the DashRDP Proxy Configurator API to Ubuntu server with SSL using Docker Compose.
+Complete guide for deploying the DashRDP Proxy Configurator API to Ubuntu server with automatic SSL using Caddy and Docker Compose.
 
 ## 🚀 Quick Start
 
@@ -43,11 +43,15 @@ exit
 git clone <your-repo> # or upload files via SCP/SFTP
 cd proxy-chrome-extension/server
 
-# Make SSL setup script executable
-chmod +x scripts/setup-ssl.sh
+# Update domain in Caddyfile
+nano Caddyfile
+# Replace 'proxyconf.api.dashrdp.cloud' with your actual domain
 
-# Run the SSL setup script
-./scripts/setup-ssl.sh
+# Start services (Caddy will automatically obtain SSL certificates)
+docker compose up -d
+
+# Check status
+docker compose ps
 ```
 
 ### 3. Configure API Key
@@ -74,24 +78,18 @@ mkdir -p /opt/proxy-api
 cd /opt/proxy-api
 
 # Copy all project files here
-# (app.py, requirements.txt, Dockerfile, docker compose.yml, nginx/, scripts/)
+# (app.py, requirements.txt, Dockerfile, docker compose.yml, Caddyfile)
 ```
 
-### 2. Set Up SSL Certificates
+### 2. Configure Domain and Start Services
 
 ```bash
-# Create directories
-sudo mkdir -p /var/www/certbot
-sudo mkdir -p /etc/letsencrypt
+# Update domain in Caddyfile
+nano Caddyfile
+# Replace 'proxyconf.api.dashrdp.cloud' with your actual domain
 
-# Start nginx without SSL first
-docker compose up -d nginx
-
-# Request SSL certificate
-docker compose run --rm certbot
-
-# Restart with SSL
-docker compose restart nginx
+# Caddy automatically handles SSL certificate generation
+# No manual SSL setup required!
 ```
 
 ### 3. Start All Services
@@ -106,26 +104,21 @@ docker compose ps
 
 ## 🔐 SSL Certificate Management
 
-### Automatic Renewal
+### Automatic Management
 
-The setup includes automatic SSL certificate renewal that runs every 12 hours:
+Caddy automatically handles all SSL certificate management:
 
-```bash
-# Check renewal logs
-docker compose logs certbot-renew
-
-# Manual renewal test
-docker compose run --rm certbot renew --dry-run
-```
-
-### Manual Renewal
+- **Automatic Issuance**: Certificates are automatically obtained from Let's Encrypt
+- **Automatic Renewal**: Certificates are automatically renewed before expiration
+- **Zero Configuration**: No manual intervention required
+- **OCSP Stapling**: Automatic OCSP stapling for better performance
 
 ```bash
-# Force renewal
-docker compose run --rm certbot renew
+# Check Caddy logs for SSL status
+docker compose logs caddy | grep -i cert
 
-# Restart nginx after renewal
-docker compose restart nginx
+# View certificate information
+docker compose exec caddy caddy list-certificates
 ```
 
 ## 📊 Monitoring and Maintenance
@@ -141,7 +134,7 @@ docker compose logs -f
 
 # Check specific service logs
 docker compose logs -f proxy-api
-docker compose logs -f nginx
+docker compose logs -f caddy
 ```
 
 ### Health Checks
@@ -174,9 +167,10 @@ docker compose up -d --build
 
 ```bash
 # Configure UFW firewall
-sudo ufw allow 22/tcp    # SSH
-sudo ufw allow 80/tcp    # HTTP
-sudo ufw allow 443/tcp   # HTTPS
+sudo ufw allow 22/tcp      # SSH
+sudo ufw allow 80/tcp      # HTTP (for ACME challenge and redirects)
+sudo ufw allow 443/tcp     # HTTPS
+sudo ufw allow 443/udp     # HTTP/3 (QUIC)
 sudo ufw enable
 ```
 
@@ -214,11 +208,14 @@ EOF
 
 1. **SSL Certificate Issues**
    ```bash
-   # Check certificate status
-   docker compose run --rm certbot certificates
+   # Check Caddy certificate status
+   docker compose exec caddy caddy list-certificates
    
-   # Test certificate renewal
-   docker compose run --rm certbot renew --dry-run
+   # Check Caddy logs for SSL-related messages
+   docker compose logs caddy | grep -i -E "(cert|ssl|acme|tls)"
+   
+   # Test certificate validity
+   openssl s_client -connect proxyconf.api.dashrdp.cloud:443 -servername proxyconf.api.dashrdp.cloud
    ```
 
 2. **API Not Responding**
@@ -226,11 +223,11 @@ EOF
    # Check API logs
    docker compose logs proxy-api
    
-   # Check nginx logs
-   docker compose logs nginx
+   # Check Caddy logs
+   docker compose logs caddy
    
    # Test internal connectivity
-   docker compose exec nginx curl http://proxy-api:5000/api/health
+   docker compose exec caddy curl http://proxy-api:5000/api/health
    ```
 
 3. **Domain Not Resolving**
@@ -249,6 +246,7 @@ EOF
    # Stop conflicting services
    sudo systemctl stop apache2  # if running
    sudo systemctl stop nginx    # if running
+   sudo systemctl stop caddy    # if running system-wide
    ```
 
 ### Log Analysis
@@ -260,20 +258,21 @@ docker compose logs -f --tail=100
 # API errors only
 docker compose logs proxy-api | grep ERROR
 
-# Nginx access logs
-docker compose exec nginx tail -f /var/log/nginx/access.log
+# Caddy access logs
+docker compose exec caddy tail -f /var/log/caddy/access.log
 ```
 
 ## 📈 Performance Optimization
 
-### Nginx Optimization
+### Caddy Optimization
 
-The nginx configuration includes:
-- Gzip compression
-- Rate limiting
-- Connection pooling
+The Caddy configuration includes:
+- Automatic Gzip compression
+- Rate limiting per endpoint
 - Security headers
-- HTTP/2 support
+- HTTP/2 and HTTP/3 support
+- Automatic HTTPS
+- Zero-downtime reloads
 
 ### Application Optimization
 
@@ -301,8 +300,9 @@ docker system prune -f
 ### Backup SSL Certificates
 
 ```bash
-# Backup certificates
-sudo tar -czf ssl-backup-$(date +%Y%m%d).tar.gz /etc/letsencrypt
+# Backup Caddy data (includes certificates)
+docker compose exec caddy tar -czf /tmp/caddy-backup-$(date +%Y%m%d).tar.gz /data
+docker cp proxy-caddy:/tmp/caddy-backup-$(date +%Y%m%d).tar.gz ./
 ```
 
 ### Backup Application Data
@@ -315,12 +315,15 @@ tar -czf proxy-api-backup-$(date +%Y%m%d).tar.gz /opt/proxy-api
 ### Recovery
 
 ```bash
-# Restore from backup
-tar -xzf ssl-backup-YYYYMMDD.tar.gz -C /
+# Restore application backup
 tar -xzf proxy-api-backup-YYYYMMDD.tar.gz -C /
 
+# Restore Caddy data
+docker cp caddy-backup-YYYYMMDD.tar.gz proxy-caddy:/tmp/
+docker compose exec caddy tar -xzf /tmp/caddy-backup-YYYYMMDD.tar.gz -C /
+
 # Restart services
-docker compose up -d
+docker compose restart
 ```
 
 ## 🌐 DNS Configuration
@@ -341,8 +344,8 @@ dig proxyconf.api.dashrdp.cloud
 - [ ] API responds to health check
 - [ ] Chrome extension can connect
 - [ ] API key is configured
-- [ ] Firewall allows ports 80/443
-- [ ] Automatic renewal is working
+- [ ] Firewall allows ports 80/443 (TCP) and 443 (UDP)
+- [ ] Caddy automatic SSL management is working
 - [ ] Logs are being generated
 - [ ] Services restart on reboot
 
@@ -364,6 +367,6 @@ If you encounter issues:
 - [ ] Backup strategy in place
 - [ ] Log rotation configured
 - [ ] Health checks working
-- [ ] Auto-renewal tested
+- [ ] Caddy SSL automation tested
 - [ ] Performance optimized
 - [ ] Security headers enabled

@@ -10,6 +10,10 @@ A Python Flask API that receives data from the DashRDP Proxy Configurator Chrome
 - **IP Information**: Retrieves public IP, ISP, and country information through the configured proxy
 - **Error Handling**: Comprehensive error handling and logging
 - **API Key Authentication**: Secure API key-based authentication
+- **Automatic SSL**: Caddy automatically handles SSL certificate generation and renewal
+- **HTTP/3 Support**: Modern HTTP/3 protocol support via Caddy
+- **Rate Limiting**: Built-in rate limiting for API protection
+- **Security Headers**: Comprehensive security headers for production deployment
 
 ## Prerequisites
 
@@ -66,6 +70,20 @@ A Python Flask API that receives data from the DashRDP Proxy Configurator Chrome
 
 ### Server Configuration
 
+#### Domain Configuration
+
+Before deploying, update the domain in the `Caddyfile`:
+
+```
+proxyconf.api.dashrdp.cloud {
+    # Your domain configuration
+}
+```
+
+Replace `proxyconf.api.dashrdp.cloud` with your actual domain name.
+
+#### Chrome Extension Configuration
+
 Update the server URL in your Chrome extension to point to your deployed API:
 
 ```javascript
@@ -89,15 +107,20 @@ The API will be available at `http://localhost:5000`
 
 ### Production with Docker
 
-For production deployment with SSL:
+For production deployment with automatic SSL via Caddy:
 
 ```bash
-# Make setup script executable
-chmod +x scripts/setup-ssl.sh
+# Start services (Caddy will automatically obtain SSL certificates)
+docker compose up -d
 
-# Run the complete setup
-./scripts/setup-ssl.sh
+# Check status
+docker compose ps
+
+# View logs
+docker compose logs -f
 ```
+
+**Note**: Caddy automatically handles SSL certificate generation and renewal via Let's Encrypt. No manual SSL setup is required.
 
 ### Manual Docker Deployment
 
@@ -210,6 +233,20 @@ The API includes comprehensive error handling for:
 ### Logs
 
 The API logs all requests and errors. Check the console output or log files for detailed error information.
+
+**Viewing Caddy logs:**
+```bash
+# View all service logs
+docker compose logs -f
+
+# View only Caddy logs
+docker compose logs -f caddy
+
+# View Flask API logs
+docker compose logs -f proxy-api
+```
+
+**Caddy access logs** are stored in `/var/log/caddy/access.log` within the container.
 
 ## Development
 
