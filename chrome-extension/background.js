@@ -1,10 +1,11 @@
 // Background script for handling Python script execution
-// Configuration
+// Simple Configuration
 const SERVER_CONFIG = {
     // Production server configuration
-    url: 'https://proxyconf-api.dashrdp.cloud',  // Production server URL
-    apiKey: '35ca0e36-5798-499d-9e48-1663238d7b88'  // Replace with your actual API key
+    url: 'https://proxyconf-api.dashrdp.cloud'  // Production server URL
 };
+
+// Simplified - removed complex security functions
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'executeScript') {
@@ -32,7 +33,7 @@ async function executeRemoteProxyScript(data) {
     const { serverIp, password, proxyIpPort } = data;
     
     try {
-        // Use remote server
+        // Use simple remote server execution
         const result = await executeViaRemoteServer(data);
         return result;
         
@@ -112,18 +113,18 @@ async function executeViaNativeMessaging(data) {
     }
 }
 
-// Remote server execution
+// Removed complex API access verification for simplicity
+
+// Simple remote server execution
 async function executeViaRemoteServer(data) {
     try {
         console.log('Making request to server:', SERVER_CONFIG.url);
-        console.log('Using API key ending in:', SERVER_CONFIG.apiKey.slice(-8));
         console.log('Request data:', data);
         
         const response = await fetch(`${SERVER_CONFIG.url}/api/execute-script`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': SERVER_CONFIG.apiKey
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(data)
         });

@@ -30,6 +30,8 @@ document.addEventListener('DOMContentLoaded', function() {
         extractFieldsFromPage();
     });
 
+    // Removed verify access button handler
+
     // Save data on input change
     const inputs = form.querySelectorAll('input');
     inputs.forEach(input => {

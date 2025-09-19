@@ -4,6 +4,7 @@ from pypsrp.powershell import PowerShell, RunspacePool
 import json
 import logging
 from datetime import datetime
+# Removed complex imports for simplicity
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -11,25 +12,9 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Configuration
-API_KEY = '35ca0e36-5798-499d-9e48-1663238d7b88'  # API key matching the Chrome extension
 
-def validate_api_key(request):
-    """Validate the API key from request headers"""
-    api_key = request.headers.get('X-API-Key')
-    
-    # Debug logging for API key validation
-    logger.info(f"API Key validation - Received: {'***' + api_key[-8:] if api_key and len(api_key) > 8 else 'None'}")
-    logger.info(f"API Key validation - Expected: {'***' + API_KEY[-8:] if len(API_KEY) > 8 else 'None'}")
-    
-    if not api_key:
-        logger.warning("No API key provided in request headers")
-        return False
-    
-    is_valid = api_key == API_KEY
-    logger.info(f"API Key validation result: {'Valid' if is_valid else 'Invalid'}")
-    
-    return is_valid
+
+# Simplified configuration - no API keys needed
 
 def execute_powershell_script(target_ip, password, proxy_ip_port):
     """
@@ -113,14 +98,9 @@ $data.country
 def execute_script():
     """
     API endpoint to receive data from Chrome extension and execute PowerShell script
+    Simplified version without API validation for initial setup
     """
     try:
-        # Validate API key
-        if not validate_api_key(request):
-            return jsonify({
-                "success": False,
-                "error": "Invalid API key"
-            }), 401
 
         # Get JSON data from request
         data = request.get_json()
@@ -185,10 +165,12 @@ Target IP: {result['target_ip']}
 Proxy: {result['proxy']}
 Status: {result['status']}"""
 
+# Removed verify-access endpoint for simplicity
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """
-    Health check endpoint
+    Simple health check endpoint
     """
     return jsonify({
         "status": "healthy",
