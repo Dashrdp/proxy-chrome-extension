@@ -12,12 +12,24 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Configuration
-API_KEY = 'your-secret-api-key-here'  # Change this to your actual API key
+API_KEY = '35ca0e36-5798-499d-9e48-1663238d7b88'  # API key matching the Chrome extension
 
 def validate_api_key(request):
     """Validate the API key from request headers"""
     api_key = request.headers.get('X-API-Key')
-    return api_key == API_KEY
+    
+    # Debug logging for API key validation
+    logger.info(f"API Key validation - Received: {'***' + api_key[-8:] if api_key and len(api_key) > 8 else 'None'}")
+    logger.info(f"API Key validation - Expected: {'***' + API_KEY[-8:] if len(API_KEY) > 8 else 'None'}")
+    
+    if not api_key:
+        logger.warning("No API key provided in request headers")
+        return False
+    
+    is_valid = api_key == API_KEY
+    logger.info(f"API Key validation result: {'Valid' if is_valid else 'Invalid'}")
+    
+    return is_valid
 
 def execute_powershell_script(target_ip, password, proxy_ip_port):
     """

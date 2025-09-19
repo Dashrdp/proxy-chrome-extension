@@ -58,6 +58,7 @@ body::before {
     gap: 10px;
     flex-shrink: 0;
     position: relative;
+    justify-content: space-between;
 }
 
 .header::after {
@@ -87,14 +88,88 @@ body::before {
     height: 14px;
 }
 
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
 h1 {
     color: #ffffff;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     letter-spacing: -0.025em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin: 0;
+}
+
+.health-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.health-indicator {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.health-icon {
+    font-size: 10px;
+    transition: all 0.3s ease;
+    animation: pulse 2s infinite;
+}
+
+.health-status.healthy .health-icon {
+    color: #22c55e;
+    animation: none;
+}
+
+.health-status.unhealthy .health-icon {
+    color: #ef4444;
+    animation: pulse 1s infinite;
+}
+
+.health-status.checking .health-icon {
+    color: #fbbf24;
+    animation: pulse 1.5s infinite;
+}
+
+.health-text {
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+}
+
+.health-status.healthy .health-text {
+    color: #22c55e;
+}
+
+.health-status.unhealthy .health-text {
+    color: #ef4444;
+}
+
+.health-status.checking .health-text {
+    color: #fbbf24;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(1.1);
+    }
 }
 
 .form-section {

@@ -7,9 +7,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const output = document.getElementById('output');
     const passwordToggle = document.getElementById('passwordToggle');
     const passwordInput = document.getElementById('password');
+    const healthStatus = document.getElementById('healthStatus');
+    const healthText = document.getElementById('healthText');
 
-    // Load saved data
-    loadSavedData();
+    // Clear old data and start fresh
+    clearOldData();
+    checkAPIHealth();
 
     // Password toggle functionality
     passwordToggle.addEventListener('click', function() {
@@ -133,22 +136,44 @@ document.addEventListener('DOMContentLoaded', function() {
                     proxyIpPort 
                 });
                 
-                if (serverIp) document.getElementById('serverIp').value = serverIp;
-                if (password) document.getElementById('password').value = password;
-                if (proxyIpPort) document.getElementById('proxyIpPort').value = proxyIpPort;
+                // Update fields and track what was extracted
+                const extractedFields = [];
+                if (serverIp) {
+                    document.getElementById('serverIp').value = serverIp;
+                    extractedFields.push('Server IP');
+                }
+                if (password) {
+                    document.getElementById('password').value = password;
+                    extractedFields.push('Password');
+                }
+                if (proxyIpPort) {
+                    document.getElementById('proxyIpPort').value = proxyIpPort;
+                    extractedFields.push('Proxy IP:Port');
+                }
 
                 saveData();
                 
-                const extractedCount = [serverIp, password, proxyIpPort].filter(Boolean).length;
-                if (extractedCount > 0) {
-                    showStatus(`Extracted ${extractedCount} field(s) from page`, 'success');
+                if (extractedFields.length > 0) {
+                    showStatus(`Extracted: ${extractedFields.join(', ')}`, 'success');
                 } else {
-                    showStatus('No data found in the expected fields', 'error');
+                    showStatus('No data found. Check console for debugging info.', 'error');
                 }
             } else {
                 const errorMsg = response?.error || 'No suitable fields found on this page';
-                showStatus(errorMsg, 'error');
+                
+                // Provide more helpful error messages
+                let userFriendlyMsg = errorMsg;
+                if (errorMsg.includes('No suitable fields')) {
+                    userFriendlyMsg = 'No proxy fields detected. Try filling them manually or check console for details.';
+                } else if (errorMsg.includes('chrome://')) {
+                    userFriendlyMsg = 'Cannot extract from browser internal pages. Navigate to a regular webpage.';
+                } else if (errorMsg.includes('Receiving end does not exist')) {
+                    userFriendlyMsg = 'Page needs to be refreshed. Please reload the page and try again.';
+                }
+                
+                showStatus(userFriendlyMsg, 'error');
                 console.log('Extraction failed:', errorMsg);
+                console.log('Check the browser console on the target page for detailed debugging information.');
             }
         } catch (error) {
             console.error('Extract error:', error);
@@ -192,6 +217,10 @@ document.addEventListener('DOMContentLoaded', function() {
         results.classList.add('hidden');
     }
 
+    function hideStatus() {
+        status.classList.add('hidden');
+    }
+
     function saveData() {
         const data = {
             serverIp: document.getElementById('serverIp').value,
@@ -199,6 +228,30 @@ document.addEventListener('DOMContentLoaded', function() {
             proxyIpPort: document.getElementById('proxyIpPort').value
         };
         chrome.storage.local.set(data);
+    }
+
+    function clearOldData() {
+        // Clear Chrome storage
+        chrome.storage.local.clear(function() {
+            console.log('Previous extension data cleared');
+        });
+        
+        // Clear all form fields
+        document.getElementById('serverIp').value = '';
+        document.getElementById('password').value = '';
+        document.getElementById('proxyIpPort').value = '';
+        
+        // Hide any previous results or status messages
+        hideResults();
+        hideStatus();
+        
+        // Show a brief indicator that data was cleared
+        showStatus('Extension reset - Ready for new data extraction', 'success');
+        setTimeout(() => {
+            hideStatus();
+        }, 2000);
+        
+        console.log('Extension opened - all old data cleared, ready for fresh extraction');
     }
 
     function loadSavedData() {
@@ -232,4 +285,30 @@ document.addEventListener('DOMContentLoaded', function() {
             passwordToggle.title = 'Show password';
         }
     }
+
+    async function checkAPIHealth() {
+        try {
+            // Get the server URL from background script
+            const response = await chrome.runtime.sendMessage({
+                action: 'healthCheck'
+            });
+
+            if (response && response.success) {
+                updateHealthStatus('healthy', 'API Online');
+            } else {
+                updateHealthStatus('unhealthy', 'API Offline');
+            }
+        } catch (error) {
+            console.error('Health check failed:', error);
+            updateHealthStatus('unhealthy', 'API Offline');
+        }
+    }
+
+    function updateHealthStatus(status, text) {
+        healthStatus.className = `health-status ${status}`;
+        healthText.textContent = text;
+    }
+
+    // Check health every 30 seconds
+    setInterval(checkAPIHealth, 30000);
 });

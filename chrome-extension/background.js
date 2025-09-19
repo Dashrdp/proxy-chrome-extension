@@ -2,8 +2,8 @@
 // Configuration
 const SERVER_CONFIG = {
     // Production server configuration
-    url: 'https://proxyconf.api.dashrdp.cloud',  // Production server URL
-    apiKey: 'your-secret-api-key-here'  // Replace with your actual API key
+    url: 'https://proxyconf-api.dashrdp.cloud',  // Production server URL
+    apiKey: '35ca0e36-5798-499d-9e48-1663238d7b88'  // Replace with your actual API key
 };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -11,6 +11,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         executeRemoteProxyScript(message.data)
             .then(result => {
                 sendResponse({ success: true, result: result });
+            })
+            .catch(error => {
+                sendResponse({ success: false, error: error.message });
+            });
+        return true; // Will respond asynchronously
+    } else if (message.action === 'healthCheck') {
+        checkAPIHealth()
+            .then(result => {
+                sendResponse({ success: result.success, data: result });
             })
             .catch(error => {
                 sendResponse({ success: false, error: error.message });
@@ -106,6 +115,10 @@ async function executeViaNativeMessaging(data) {
 // Remote server execution
 async function executeViaRemoteServer(data) {
     try {
+        console.log('Making request to server:', SERVER_CONFIG.url);
+        console.log('Using API key ending in:', SERVER_CONFIG.apiKey.slice(-8));
+        console.log('Request data:', data);
+        
         const response = await fetch(`${SERVER_CONFIG.url}/api/execute-script`, {
             method: 'POST',
             headers: {
@@ -131,5 +144,37 @@ async function executeViaRemoteServer(data) {
             throw new Error(`Cannot connect to server at ${SERVER_CONFIG.url}. Please check the server URL and ensure the server is running.`);
         }
         throw error;
+    }
+}
+
+// API Health check
+async function checkAPIHealth() {
+    try {
+        const response = await fetch(`${SERVER_CONFIG.url}/api/health`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            return {
+                success: true,
+                status: data.status || 'healthy',
+                timestamp: data.timestamp,
+                service: data.service
+            };
+        } else {
+            return {
+                success: false,
+                error: `Server returned ${response.status}`
+            };
+        }
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message || 'Connection failed'
+        };
     }
 }
