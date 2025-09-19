@@ -226,7 +226,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showResults(result) {
-        output.textContent = result;
+        if (result && result.trim()) {
+            // Show the actual result content
+            output.textContent = result;
+        } else {
+            // Fallback to green "Proxy Active" if no result
+            output.innerHTML = '<span class="proxy-active-text">Proxy Active</span>';
+        }
         results.classList.remove('hidden');
     }
 
