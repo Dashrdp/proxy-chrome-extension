@@ -1,7 +1,7 @@
 # Caddyfile for DashRDP Proxy Configurator API
 # Caddy automatically handles SSL certificates via Let's Encrypt
 
-proxyconf.api.dashrdp.cloud {
+proxyconf-api.dashrdp.cloud {
     # Rate limiting (using request_body directive instead)
     # Note: Basic rate limiting with Caddy's built-in features
 
