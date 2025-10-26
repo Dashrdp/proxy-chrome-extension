@@ -127,12 +127,27 @@ $graceStatus = cscript //nologo C:\\Windows\\System32\\slmgr.vbs /xpr 2>&1 | Out
 # Parse to find remaining days
 $remainingDays = -1
 $isExpired = $false
+$needsRearm = $false
 
+# Try multiple patterns to extract days
 if ($graceStatus -match "(\\d+)\\s+day") {
     $remainingDays = [int]$matches[1]
-} elseif ($graceStatus -match "expired" -or $graceStatus -match "will expire") {
+} elseif ($graceStatus -match "expired" -or $graceStatus -match "Notification mode") {
     $isExpired = $true
+    $needsRearm = $true
     $remainingDays = 0
+}
+
+# Check license status for other indicators
+if ($licenseStatus -match "Notification mode" -or $licenseStatus -match "expired") {
+    $isExpired = $true
+    $needsRearm = $true
+    $remainingDays = 0
+}
+
+# If we couldn't determine days, assume we need to rearm
+if ($remainingDays -eq -1) {
+    $needsRearm = $true
 }
 
 # Output results
@@ -140,6 +155,7 @@ Write-Output "LICENSE_STATUS:$licenseStatus"
 Write-Output "GRACE_STATUS:$graceStatus"
 Write-Output "REMAINING_DAYS:$remainingDays"
 Write-Output "IS_EXPIRED:$isExpired"
+Write-Output "NEEDS_REARM:$needsRearm"
 ''')
 
         output = ps.invoke()
@@ -150,6 +166,7 @@ Write-Output "IS_EXPIRED:$isExpired"
         grace_status = ""
         remaining_days = -1
         is_expired = False
+        needs_rearm = False
 
         if output:
             for line in output:
@@ -165,12 +182,20 @@ Write-Output "IS_EXPIRED:$isExpired"
                         remaining_days = -1
                 elif line_str.startswith("IS_EXPIRED:"):
                     is_expired = line_str.replace("IS_EXPIRED:", "").lower() == "true"
+                elif line_str.startswith("NEEDS_REARM:"):
+                    needs_rearm = line_str.replace("NEEDS_REARM:", "").lower() == "true"
+
+        # Additional logic: if remaining days is unknown (-1) or in notification mode, needs rearm
+        if remaining_days == -1 or "notification mode" in grace_status.lower() or "notification mode" in license_status.lower():
+            needs_rearm = True
+            is_expired = True
 
         result = {
             "license_status": license_status,
             "grace_status": grace_status,
             "remaining_days": remaining_days,
             "is_expired": is_expired,
+            "needs_rearm": needs_rearm,
             "timestamp": datetime.now().isoformat()
         }
 
@@ -418,7 +443,8 @@ def check_rdp_license():
             "success": True,
             "result": formatted_result,
             "remaining_days": result.get('remaining_days', -1),
-            "is_expired": result.get('is_expired', False)
+            "is_expired": result.get('is_expired', False),
+            "needs_rearm": result.get('needs_rearm', False)
         })
 
     except Exception as e:
@@ -464,12 +490,37 @@ def extend_rdp():
         license_result = check_rdp_license_status(target_ip, password)
         remaining_days = license_result.get('remaining_days', -1)
         is_expired = license_result.get('is_expired', False)
+        needs_rearm = license_result.get('needs_rearm', False)
 
-        logger.info(f"License check - Remaining days: {remaining_days}, Is expired: {is_expired}")
+        logger.info(f"License check - Remaining days: {remaining_days}, Is expired: {is_expired}, Needs rearm: {needs_rearm}")
 
-        # Only rearm if expired or force flag is set
-        if is_expired or remaining_days == 0 or force_rearm:
-            logger.info("License is expired or force rearm requested. Proceeding with rearm...")
+        # Rearm if:
+        # 1. License is expired or in notification mode
+        # 2. Remaining days is unknown (-1)
+        # 3. Remaining days is less than 30
+        # 4. Force rearm flag is set
+        should_rearm = (
+            force_rearm or 
+            needs_rearm or 
+            is_expired or 
+            remaining_days == -1 or 
+            (remaining_days >= 0 and remaining_days < 30)
+        )
+
+        if should_rearm:
+            reason = []
+            if force_rearm:
+                reason.append("Force rearm requested")
+            if needs_rearm:
+                reason.append("License needs rearm")
+            if is_expired:
+                reason.append("License expired")
+            if remaining_days == -1:
+                reason.append("Cannot determine remaining days")
+            if remaining_days >= 0 and remaining_days < 30:
+                reason.append(f"Less than 30 days remaining ({remaining_days} days)")
+            
+            logger.info(f"Proceeding with rearm. Reasons: {', '.join(reason)}")
             
             # Execute the RDP extension
             rearm_result = execute_rdp_rearm(target_ip, password)
@@ -481,7 +532,8 @@ def extend_rdp():
                 "success": True,
                 "result": formatted_result,
                 "action_taken": "rearm_executed",
-                "previous_remaining_days": remaining_days
+                "previous_remaining_days": remaining_days,
+                "rearm_reason": ', '.join(reason)
             })
         else:
             logger.info(f"License is still valid ({remaining_days} days remaining). No rearm needed.")
@@ -509,18 +561,27 @@ def format_license_check_result(result):
     """
     remaining_days = result.get('remaining_days', -1)
     is_expired = result.get('is_expired', False)
+    needs_rearm = result.get('needs_rearm', False)
     grace_status = result.get('grace_status', 'Unknown')
     
-    if is_expired or remaining_days == 0:
-        status_text = "⚠️ LICENSE EXPIRED"
-    elif remaining_days > 0:
+    # Determine status based on multiple factors
+    if is_expired or remaining_days == 0 or needs_rearm:
+        status_text = "⚠️ LICENSE EXPIRED / NEEDS REARM"
+    elif remaining_days == -1:
+        status_text = "⚠️ LICENSE STATUS UNKNOWN - WILL REARM"
+    elif remaining_days > 0 and remaining_days < 30:
+        status_text = f"⚠️ LICENSE EXPIRING SOON ({remaining_days} days)"
+    elif remaining_days >= 30:
         status_text = f"✅ LICENSE ACTIVE"
     else:
         status_text = "ℹ️ LICENSE STATUS UNKNOWN"
     
+    days_display = remaining_days if remaining_days >= 0 else 'Unknown'
+    
     return f"""{status_text}
-Remaining Days: {remaining_days if remaining_days >= 0 else 'Unknown'}
+Remaining Days: {days_display}
 Grace Status: {grace_status}
+Action Required: {'Yes - Will rearm' if (needs_rearm or remaining_days == -1 or (remaining_days >= 0 and remaining_days < 30)) else 'No'}
 Timestamp: {result.get('timestamp', 'Unknown')}"""
 
 def format_rdp_result(rearm_result, license_result=None):

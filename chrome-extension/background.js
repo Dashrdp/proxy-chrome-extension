@@ -36,7 +36,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
         })
             .then(result => {
-                sendResponse({ success: true, result: result.result, remaining_days: result.remaining_days, is_expired: result.is_expired });
+                sendResponse({ 
+                    success: true, 
+                    result: result.result, 
+                    remaining_days: result.remaining_days, 
+                    is_expired: result.is_expired,
+                    needs_rearm: result.needs_rearm
+                });
             })
             .catch(error => {
                 sendResponse({ success: false, error: error.message });
@@ -378,7 +384,8 @@ async function executeViaRemoteServerCheckLicense(data, progressCallback) {
             return {
                 result: responseData.result,
                 remaining_days: responseData.remaining_days,
-                is_expired: responseData.is_expired
+                is_expired: responseData.is_expired,
+                needs_rearm: responseData.needs_rearm || false
             };
         } else {
             console.error('Server reported failure:', responseData.error);

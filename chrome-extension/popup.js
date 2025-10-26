@@ -436,16 +436,31 @@ document.addEventListener('DOMContentLoaded', function() {
             if (licenseResponse.success) {
                 const remainingDays = licenseResponse.remaining_days;
                 const isExpired = licenseResponse.is_expired;
+                const needsRearm = licenseResponse.needs_rearm;
 
-                updateProgress({ step: 2, message: `License check complete. Days remaining: ${remainingDays}`, percentage: 40 });
+                const daysDisplay = remainingDays >= 0 ? remainingDays : 'Unknown';
+                updateProgress({ step: 2, message: `License check complete. Days remaining: ${daysDisplay}`, percentage: 40 });
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
                 // Show license status
                 showResults(licenseResponse.result);
 
-                // Check if we need to rearm
-                if (isExpired || remainingDays === 0) {
-                    updateProgress({ step: 3, message: 'License expired. Executing rearm and restart...', percentage: 60 });
+                // Check if we need to rearm (expires soon, unknown, or expired)
+                const shouldRearm = needsRearm || isExpired || remainingDays === -1 || (remainingDays >= 0 && remainingDays < 30);
+
+                if (shouldRearm) {
+                    let rearmReason = '';
+                    if (remainingDays === -1) {
+                        rearmReason = 'Cannot determine remaining days';
+                    } else if (isExpired || remainingDays === 0) {
+                        rearmReason = 'License expired';
+                    } else if (remainingDays < 30) {
+                        rearmReason = `Less than 30 days remaining (${remainingDays} days)`;
+                    } else if (needsRearm) {
+                        rearmReason = 'License in notification mode';
+                    }
+
+                    updateProgress({ step: 3, message: `${rearmReason}. Executing rearm and restart...`, percentage: 60 });
                     await new Promise(resolve => setTimeout(resolve, 500));
 
                     // Execute the rearm
@@ -463,7 +478,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         showStatus(`Rearm failed: ${rearmResponse.error}`, 'error');
                     }
                 } else {
-                    // License is still valid, no need to rearm
+                    // License is still valid (30+ days), no need to rearm
                     hideProgress();
                     showStatus(`License is still valid (${remainingDays} days remaining). No action needed.`, 'success');
                 }
