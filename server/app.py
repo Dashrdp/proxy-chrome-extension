@@ -267,175 +267,46 @@ try {
     }
 }
 
-# Restart RDP Service - Full restart with proper wait times
-Write-Output "SERVICE_RESTART:Starting full RDP service restart"
+# SERVER REBOOT - Restart entire server for rearm to take effect
+Write-Output "SERVER_REBOOT:Initiating full server reboot"
+Write-Output "SERVER_REBOOT:Note - Server will be offline for 2-3 minutes"
 
-# Method 1: Use Restart-Service command (most reliable)
 try {
-    Write-Output "SERVICE_RESTART:Using Restart-Service method"
-    Restart-Service -Name "TermService" -Force -ErrorAction Stop
-    Start-Sleep -Seconds 5
+    # Schedule a reboot in 10 seconds to allow script to complete and return results
+    Write-Output "SERVER_REBOOT:Scheduling reboot in 10 seconds"
     
-    $serviceAfterRestart = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
-    Write-Output "SERVICE_AFTER_RESTART:$($serviceAfterRestart.Status)"
+    # Use shutdown command to restart
+    $rebootResult = & shutdown /r /t 10 /c "Rebooting server after Windows license rearm" /f 2>&1
+    Write-Output "REBOOT_SCHEDULED:$rebootResult"
     
-    if ($serviceAfterRestart.Status -ne "Running") {
-        throw "Service not running after restart"
-    }
+    Write-Output "REBOOT_STATUS:Server reboot scheduled successfully"
+    Write-Output "REBOOT_TIME:Server will restart in 10 seconds"
+    
 } catch {
-    Write-Output "SERVICE_RESTART_METHOD1_ERROR:$($_.Exception.Message)"
+    Write-Output "REBOOT_ERROR:$($_.Exception.Message)"
     
-    # Method 2: Manual Stop and Start (fallback)
-    Write-Output "SERVICE_RESTART:Trying manual stop/start method"
+    # Try alternative method
+    Write-Output "REBOOT_RETRY:Trying Restart-Computer method"
     try {
-        # Force stop the service
-        Write-Output "SERVICE_STOP:Force stopping TermService"
-        Stop-Service -Name "TermService" -Force -ErrorAction Stop
-        Start-Sleep -Seconds 3
-        
-        $stoppedService = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
-        Write-Output "SERVICE_AFTER_STOP:$($stoppedService.Status)"
-        
-        # Start the service
-        Write-Output "SERVICE_START:Starting TermService"
-        Start-Service -Name "TermService" -ErrorAction Stop
-        Start-Sleep -Seconds 5
-        
-        $startedService = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
-        Write-Output "SERVICE_AFTER_START:$($startedService.Status)"
+        # Schedule restart
+        Restart-Computer -Force -Delay 10 -ErrorAction Stop
+        Write-Output "REBOOT_STATUS:Server reboot initiated via Restart-Computer"
     } catch {
-        Write-Output "SERVICE_RESTART_METHOD2_ERROR:$($_.Exception.Message)"
+        Write-Output "REBOOT_RETRY_ERROR:$($_.Exception.Message)"
         
-        # Method 3: Use net stop/start (last resort)
-        Write-Output "SERVICE_RESTART:Trying net stop/start method"
-        try {
-            & net stop TermService /y 2>&1 | Out-String | Write-Output
-            Start-Sleep -Seconds 3
-            & net start TermService 2>&1 | Out-String | Write-Output
-            Start-Sleep -Seconds 5
-            Write-Output "SERVICE_RESTART_METHOD3:Executed net commands"
-        } catch {
-            Write-Output "SERVICE_RESTART_METHOD3_ERROR:$($_.Exception.Message)"
-        }
+        # Last resort - direct shutdown command
+        Write-Output "REBOOT_LAST_RESORT:Using direct shutdown.exe"
+        & shutdown.exe -r -t 10 -f
+        Write-Output "REBOOT_STATUS:Direct shutdown command executed"
     }
 }
 
-# Get final service status to verify
-$finalService = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
-$finalStatus = $finalService.Status
-Write-Output "FINAL_SERVICE_STATUS:$finalStatus"
+Write-Output "REBOOT_COMPLETE:Reboot command executed, server will restart shortly"
 
-# If service is still not running, try one more time
-if ($finalStatus -ne "Running") {
-    Write-Output "SERVICE_FINAL_ATTEMPT:Service not running, attempting final restart"
-    try {
-        Start-Service -Name "TermService" -ErrorAction Stop
-        Start-Sleep -Seconds 3
-        $finalService = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
-        Write-Output "FINAL_SERVICE_STATUS_AFTER_RETRY:$($finalService.Status)"
-    } catch {
-        Write-Output "SERVICE_FINAL_ATTEMPT_ERROR:$($_.Exception.Message)"
-    }
-}
-
-# Disconnect active RDP sessions to force reconnection
-Write-Output "SESSION_DISCONNECT:Disconnecting RDP sessions for clean restart"
-try {
-    $sessions = query session 2>$null
-    if ($sessions) {
-        $rdpSessions = $sessions | Select-String "rdp-tcp"
-        if ($rdpSessions) {
-            foreach ($session in $rdpSessions) {
-                $parts = $session -split "\\s+"
-                # Session ID is typically in position 2 or 3
-                foreach ($part in $parts) {
-                    if ($part -match "^\\d+$") {
-                        try {
-                            logoff $part /server:localhost 2>$null
-                            Write-Output "SESSION_DISCONNECTED:$part"
-                            Start-Sleep -Milliseconds 500
-                        } catch {
-                            Write-Output "SESSION_DISCONNECT_PARTIAL:Could not disconnect session $part"
-                        }
-                        break
-                    }
-                }
-            }
-        } else {
-            Write-Output "SESSION_DISCONNECT:No active RDP sessions found"
-        }
-    } else {
-        Write-Output "SESSION_DISCONNECT:Could not query sessions"
-    }
-} catch {
-    Write-Output "SESSION_DISCONNECT_ERROR:$($_.Exception.Message)"
-}
-
-# Wait for server to stabilize after restart (2-3 minutes)
-Write-Output "SERVER_WAIT:Waiting for server to stabilize after RDP restart"
-Write-Output "SERVER_WAIT:This may take 2-3 minutes, please wait..."
-
-$maxWaitTime = 180  # 3 minutes in seconds
-$waitInterval = 10   # Check every 10 seconds
-$elapsedTime = 0
-$serverOnline = $false
-
-while ($elapsedTime -lt $maxWaitTime) {
-    Start-Sleep -Seconds $waitInterval
-    $elapsedTime += $waitInterval
-    
-    Write-Output "SERVER_WAIT:Elapsed time: $elapsedTime seconds..."
-    
-    # Check if RDP service is responsive
-    try {
-        $service = Get-Service -Name "TermService" -ErrorAction Stop
-        if ($service.Status -eq "Running") {
-            # Try to query sessions to verify RDP is actually accepting connections
-            $testSession = query session 2>$null
-            if ($testSession) {
-                $serverOnline = $true
-                Write-Output "SERVER_ONLINE:Server is back online after $elapsedTime seconds"
-                break
-            }
-        }
-    } catch {
-        Write-Output "SERVER_WAIT:Still waiting... (Error: $($_.Exception.Message))"
-    }
-}
-
-if (-not $serverOnline) {
-    Write-Output "SERVER_WAIT:Timeout reached, proceeding with verification anyway"
-}
-
-# Verify license was actually rearmed by checking again
-Write-Output "LICENSE_VERIFY:Checking license status after rearm and restart"
-try {
-    # Wait a bit more to ensure license service is ready
-    Start-Sleep -Seconds 5
-    
-    # Get detailed license information
-    $newLicenseStatus = cscript //nologo C:\\Windows\\System32\\slmgr.vbs /xpr 2>&1 | Out-String
-    Write-Output "LICENSE_NEW_STATUS:$newLicenseStatus"
-    
-    # Also get grace period details
-    $licenseDetails = cscript //nologo C:\\Windows\\System32\\slmgr.vbs /dli 2>&1 | Out-String
-    Write-Output "LICENSE_DETAILS:$licenseDetails"
-    
-    # Parse to check if rearm was successful
-    if ($newLicenseStatus -match "(\\d+)\\s+day") {
-        $newDays = [int]$matches[1]
-        Write-Output "LICENSE_NEW_DAYS:$newDays"
-        Write-Output "LICENSE_VERIFY_STATUS:Success - License now has $newDays days"
-    } elseif ($newLicenseStatus -match "permanently activated") {
-        Write-Output "LICENSE_VERIFY_STATUS:Success - License is permanently activated"
-    } else {
-        Write-Output "LICENSE_VERIFY_STATUS:Completed - Check status above"
-    }
-} catch {
-    Write-Output "LICENSE_VERIFY_ERROR:$($_.Exception.Message)"
-}
-
-Write-Output "OPERATION_COMPLETE:All operations finished"
+Write-Output "OPERATION_COMPLETE:Rearm and reboot commands executed"
+Write-Output "SERVER_REBOOT_NOTE:Server is now rebooting, connection will be lost"
+Write-Output "SERVER_REBOOT_NOTE:Server will be back online in approximately 2-3 minutes"
+Write-Output "SERVER_REBOOT_NOTE:Please wait 2-3 minutes then use CHECK LICENSE button to verify"
 ''')
 
         output = ps.invoke()
@@ -447,16 +318,10 @@ Write-Output "OPERATION_COMPLETE:All operations finished"
             "rearm_status": "Unknown",
             "rearm_output": "Unknown",
             "rearm_exit_code": "Unknown",
-            "service_after_stop": "Unknown",
-            "service_after_start": "Unknown",
-            "final_service_status": "Unknown",
-            "sessions_disconnected": [],
-            "server_wait_time": "Unknown",
-            "server_online_status": "Unknown",
-            "new_license_status": "Unknown",
-            "license_details": "Unknown",
-            "license_new_days": "Unknown",
-            "license_verify_status": "Unknown",
+            "reboot_status": "Unknown",
+            "reboot_time": "Unknown",
+            "reboot_scheduled": "Unknown",
+            "server_reboot_notes": [],
             "raw_output": [],
             "timestamp": datetime.now().isoformat()
         }
@@ -474,29 +339,14 @@ Write-Output "OPERATION_COMPLETE:All operations finished"
                     result["rearm_output"] = line_str.replace("REARM_OUTPUT:", "")
                 elif line_str.startswith("REARM_EXIT_CODE:"):
                     result["rearm_exit_code"] = line_str.replace("REARM_EXIT_CODE:", "")
-                elif line_str.startswith("SERVICE_AFTER_STOP:"):
-                    result["service_after_stop"] = line_str.replace("SERVICE_AFTER_STOP:", "")
-                elif line_str.startswith("SERVICE_AFTER_START:"):
-                    result["service_after_start"] = line_str.replace("SERVICE_AFTER_START:", "")
-                elif line_str.startswith("FINAL_SERVICE_STATUS:"):
-                    result["final_service_status"] = line_str.replace("FINAL_SERVICE_STATUS:", "")
-                elif line_str.startswith("SESSION_DISCONNECTED:"):
-                    result["sessions_disconnected"].append(line_str.replace("SESSION_DISCONNECTED:", ""))
-                elif line_str.startswith("SERVER_ONLINE:"):
-                    result["server_online_status"] = line_str.replace("SERVER_ONLINE:", "")
-                    # Extract wait time from the message
-                    import re
-                    match = re.search(r'(\d+)\s+seconds', line_str)
-                    if match:
-                        result["server_wait_time"] = match.group(1)
-                elif line_str.startswith("LICENSE_NEW_STATUS:"):
-                    result["new_license_status"] = line_str.replace("LICENSE_NEW_STATUS:", "")
-                elif line_str.startswith("LICENSE_DETAILS:"):
-                    result["license_details"] = line_str.replace("LICENSE_DETAILS:", "")
-                elif line_str.startswith("LICENSE_NEW_DAYS:"):
-                    result["license_new_days"] = line_str.replace("LICENSE_NEW_DAYS:", "")
-                elif line_str.startswith("LICENSE_VERIFY_STATUS:"):
-                    result["license_verify_status"] = line_str.replace("LICENSE_VERIFY_STATUS:", "")
+                elif line_str.startswith("REBOOT_STATUS:"):
+                    result["reboot_status"] = line_str.replace("REBOOT_STATUS:", "")
+                elif line_str.startswith("REBOOT_TIME:"):
+                    result["reboot_time"] = line_str.replace("REBOOT_TIME:", "")
+                elif line_str.startswith("REBOOT_SCHEDULED:"):
+                    result["reboot_scheduled"] = line_str.replace("REBOOT_SCHEDULED:", "")
+                elif line_str.startswith("SERVER_REBOOT_NOTE:"):
+                    result["server_reboot_notes"].append(line_str.replace("SERVER_REBOOT_NOTE:", ""))
 
         logger.info(f"RDP rearm result: {result}")
         return result
@@ -805,24 +655,16 @@ def format_rdp_result(rearm_result, license_result=None):
     rearm_status = rearm_result.get('rearm_status', 'Unknown')
     rearm_output = rearm_result.get('rearm_output', 'Unknown')
     rearm_exit_code = rearm_result.get('rearm_exit_code', 'Unknown')
-    initial_service = rearm_result.get('initial_service_status', 'Unknown')
-    service_after_stop = rearm_result.get('service_after_stop', 'Unknown')
-    service_after_start = rearm_result.get('service_after_start', 'Unknown')
-    final_service = rearm_result.get('final_service_status', 'Unknown')
-    sessions = rearm_result.get('sessions_disconnected', [])
-    server_wait_time = rearm_result.get('server_wait_time', 'Unknown')
-    server_online_status = rearm_result.get('server_online_status', 'Unknown')
-    new_license = rearm_result.get('new_license_status', 'Unknown')
-    license_new_days = rearm_result.get('license_new_days', 'Unknown')
-    license_verify = rearm_result.get('license_verify_status', 'Unknown')
+    reboot_status = rearm_result.get('reboot_status', 'Unknown')
+    reboot_time = rearm_result.get('reboot_time', 'Unknown')
+    reboot_notes = rearm_result.get('server_reboot_notes', [])
     raw_output = rearm_result.get('raw_output', [])
     
     # Determine overall success
-    overall_status = "✅ SUCCESS" if (
+    overall_status = "✅ REARM SUCCESSFUL - SERVER REBOOTING" if (
         rearm_exit_code == "0" and 
-        final_service == "Running" and
-        license_new_days != "Unknown"
-    ) else "⚠️ PARTIAL SUCCESS" if final_service == "Running" else "❌ FAILED"
+        reboot_status != "Unknown"
+    ) else "⚠️ PARTIAL SUCCESS" if rearm_status != "Unknown" else "❌ FAILED"
     
     result_text = f"""RDP Extension Complete
 {overall_status}
@@ -832,25 +674,17 @@ Status: {rearm_status}
 Output: {rearm_output}
 Exit Code: {rearm_exit_code}
 
-━━━ SERVICE RESTART ━━━
-Initial Status: {initial_service}
-After Stop: {service_after_stop}
-After Start: {service_after_start}
-Final Status: {final_service}
+━━━ SERVER REBOOT ━━━
+Status: {reboot_status}
+Timing: {reboot_time}
 
-━━━ SESSION MANAGEMENT ━━━
-Disconnected Sessions: {len(sessions) if sessions else 'None'}
-{chr(10).join([f"  - Session {s}" for s in sessions]) if sessions else "  - No active sessions found"}
+⚠️ IMPORTANT NOTES:
+{chr(10).join([f"  • {note}" for note in reboot_notes]) if reboot_notes else "  • Server is rebooting"}
 
-━━━ SERVER STABILIZATION ━━━
-Wait Time: {server_wait_time} seconds
-Status: {server_online_status if server_online_status != 'Unknown' else 'Server came back online'}
-
-━━━ LICENSE VERIFICATION ━━━
-Verification: {license_verify}
-New Days Remaining: {license_new_days}
-License Status:
-{new_license.strip()}
+━━━ NEXT STEPS ━━━
+1. Wait 2-3 minutes for server to reboot
+2. Server will come back online automatically
+3. Click "EXTEND RDP LICENSE" again to verify license
 
 Timestamp: {rearm_result.get('timestamp', 'Unknown')}"""
 
@@ -860,7 +694,7 @@ Timestamp: {rearm_result.get('timestamp', 'Unknown')}"""
 
 ━━━ SUMMARY ━━━
 Previous Days: {prev_days}
-Action Taken: Rearm executed and RDP restarted"""
+Action Taken: Rearm executed and server rebooting"""
 
     return result_text
 
