@@ -227,65 +227,145 @@ def execute_rdp_rearm(target_ip, password):
         pool.open()
         ps = PowerShell(pool)
 
-        # Execute RDP extension commands
+        # Execute RDP extension commands with detailed output
         ps.add_script('''
-# Re-arm Windows license
-Write-Host "Re-arming Windows license..."
-$rearmResult = Start-Process -FilePath "slmgr.vbs" -ArgumentList "/rearm" -NoNewWindow -Wait -PassThru
+# Get initial service status
+$initialService = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
+$initialStatus = $initialService.Status
+
+Write-Output "INITIAL_SERVICE_STATUS:$initialStatus"
+
+# Execute slmgr rearm - Run directly without Start-Process
+Write-Output "REARM_START:Executing slmgr /rearm"
+try {
+    # Method 1: Direct execution with cscript
+    $rearmOutput = & cscript.exe //nologo C:\Windows\System32\slmgr.vbs /rearm 2>&1
+    $rearmExitCode = $LASTEXITCODE
+    
+    Write-Output "REARM_OUTPUT:$rearmOutput"
+    Write-Output "REARM_EXIT_CODE:$rearmExitCode"
+    
+    if ($rearmExitCode -eq 0 -or $rearmOutput -like "*success*" -or $rearmOutput -like "*completed*") {
+        Write-Output "REARM_STATUS:Success - Rearm executed"
+    } else {
+        Write-Output "REARM_STATUS:Completed with code $rearmExitCode"
+    }
+    
+    # Wait a moment for rearm to take effect
+    Start-Sleep -Seconds 2
+} catch {
+    Write-Output "REARM_STATUS:Error - $($_.Exception.Message)"
+    Write-Output "REARM_EXIT_CODE:-1"
+    
+    # Try alternative method
+    Write-Output "REARM_RETRY:Trying alternative method"
+    try {
+        slmgr.vbs /rearm
+        Write-Output "REARM_STATUS:Alternative method executed"
+    } catch {
+        Write-Output "REARM_RETRY_ERROR:$($_.Exception.Message)"
+    }
+}
 
 # Stop RDP service
-Write-Host "Stopping Remote Desktop Service..."
-Stop-Service -Name "TermService" -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
+Write-Output "SERVICE_STOP:Attempting to stop TermService"
+try {
+    Stop-Service -Name "TermService" -Force -ErrorAction Stop
+    Start-Sleep -Seconds 3
+    $stoppedService = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
+    Write-Output "SERVICE_AFTER_STOP:$($stoppedService.Status)"
+} catch {
+    Write-Output "SERVICE_STOP_ERROR:$($_.Exception.Message)"
+}
 
 # Start RDP service
-Write-Host "Starting Remote Desktop Service..."
-Start-Service -Name "TermService" -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
-
-# Get service status
-$service = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
-
-# Restart the RDP connection (disconnect current session)
-Write-Host "Restarting RDP connections..."
-query session | Select-String "rdp-tcp#" | ForEach-Object {
-    $sessionId = ($_ -split "\\s+")[2]
-    logoff $sessionId /server:localhost 2>$null
+Write-Output "SERVICE_START:Attempting to start TermService"
+try {
+    Start-Service -Name "TermService" -ErrorAction Stop
+    Start-Sleep -Seconds 3
+    $startedService = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
+    Write-Output "SERVICE_AFTER_START:$($startedService.Status)"
+} catch {
+    Write-Output "SERVICE_START_ERROR:$($_.Exception.Message)"
 }
 
-# Return results
-@{
-    Status = "Success"
-    ServiceStatus = $service.Status
-    RearmExitCode = $rearmResult.ExitCode
-    Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+# Get final service status
+$finalService = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
+$finalStatus = $finalService.Status
+Write-Output "FINAL_SERVICE_STATUS:$finalStatus"
+
+# Disconnect active RDP sessions
+Write-Output "SESSION_DISCONNECT:Attempting to disconnect RDP sessions"
+try {
+    $sessions = query session 2>$null | Select-String "rdp-tcp#"
+    if ($sessions) {
+        foreach ($session in $sessions) {
+            $sessionId = ($session -split "\\s+")[2]
+            logoff $sessionId /server:localhost 2>$null
+            Write-Output "SESSION_DISCONNECTED:$sessionId"
+        }
+    } else {
+        Write-Output "SESSION_DISCONNECT:No active RDP sessions found"
+    }
+} catch {
+    Write-Output "SESSION_DISCONNECT_ERROR:$($_.Exception.Message)"
 }
+
+# Verify license was actually rearmed by checking again
+Write-Output "LICENSE_VERIFY:Checking license status after rearm"
+try {
+    $newLicenseStatus = cscript //nologo C:\\Windows\\System32\\slmgr.vbs /xpr 2>&1 | Out-String
+    Write-Output "LICENSE_NEW_STATUS:$newLicenseStatus"
+} catch {
+    Write-Output "LICENSE_VERIFY_ERROR:$($_.Exception.Message)"
+}
+
+Write-Output "OPERATION_COMPLETE:All operations finished"
 ''')
 
         output = ps.invoke()
         pool.close()
 
-        # Parse the output
-        if output and len(output) > 0:
-            result_dict = {}
-            for item in output:
-                if hasattr(item, 'properties'):
-                    for key, value in item.properties.items():
-                        result_dict[key] = str(value)
-            
-            result = {
-                "status": result_dict.get('Status', 'Unknown'),
-                "service_status": result_dict.get('ServiceStatus', 'Unknown'),
-                "rearm_exit_code": result_dict.get('RearmExitCode', 'Unknown'),
-                "timestamp": result_dict.get('Timestamp', datetime.now().isoformat())
-            }
-        else:
-            result = {
-                "status": "Success",
-                "service_status": "Running",
-                "timestamp": datetime.now().isoformat()
-            }
+        # Parse the detailed output
+        result = {
+            "initial_service_status": "Unknown",
+            "rearm_status": "Unknown",
+            "rearm_output": "Unknown",
+            "rearm_exit_code": "Unknown",
+            "service_after_stop": "Unknown",
+            "service_after_start": "Unknown",
+            "final_service_status": "Unknown",
+            "sessions_disconnected": [],
+            "new_license_status": "Unknown",
+            "raw_output": [],
+            "timestamp": datetime.now().isoformat()
+        }
 
+        if output:
+            for line in output:
+                line_str = str(line).strip()
+                result["raw_output"].append(line_str)
+                
+                if line_str.startswith("INITIAL_SERVICE_STATUS:"):
+                    result["initial_service_status"] = line_str.replace("INITIAL_SERVICE_STATUS:", "")
+                elif line_str.startswith("REARM_STATUS:"):
+                    result["rearm_status"] = line_str.replace("REARM_STATUS:", "")
+                elif line_str.startswith("REARM_OUTPUT:"):
+                    result["rearm_output"] = line_str.replace("REARM_OUTPUT:", "")
+                elif line_str.startswith("REARM_EXIT_CODE:"):
+                    result["rearm_exit_code"] = line_str.replace("REARM_EXIT_CODE:", "")
+                elif line_str.startswith("SERVICE_AFTER_STOP:"):
+                    result["service_after_stop"] = line_str.replace("SERVICE_AFTER_STOP:", "")
+                elif line_str.startswith("SERVICE_AFTER_START:"):
+                    result["service_after_start"] = line_str.replace("SERVICE_AFTER_START:", "")
+                elif line_str.startswith("FINAL_SERVICE_STATUS:"):
+                    result["final_service_status"] = line_str.replace("FINAL_SERVICE_STATUS:", "")
+                elif line_str.startswith("SESSION_DISCONNECTED:"):
+                    result["sessions_disconnected"].append(line_str.replace("SESSION_DISCONNECTED:", ""))
+                elif line_str.startswith("LICENSE_NEW_STATUS:"):
+                    result["new_license_status"] = line_str.replace("LICENSE_NEW_STATUS:", "")
+
+        logger.info(f"RDP rearm result: {result}")
         return result
 
     except Exception as e:
@@ -588,18 +668,54 @@ def format_rdp_result(rearm_result, license_result=None):
     """
     Format the RDP extension result for the Chrome extension
     """
+    # Get detailed status
+    rearm_status = rearm_result.get('rearm_status', 'Unknown')
+    rearm_output = rearm_result.get('rearm_output', 'Unknown')
+    rearm_exit_code = rearm_result.get('rearm_exit_code', 'Unknown')
+    initial_service = rearm_result.get('initial_service_status', 'Unknown')
+    service_after_stop = rearm_result.get('service_after_stop', 'Unknown')
+    service_after_start = rearm_result.get('service_after_start', 'Unknown')
+    final_service = rearm_result.get('final_service_status', 'Unknown')
+    sessions = rearm_result.get('sessions_disconnected', [])
+    new_license = rearm_result.get('new_license_status', 'Unknown')
+    raw_output = rearm_result.get('raw_output', [])
+    
+    # Determine overall success
+    overall_status = "✅ SUCCESS" if (
+        rearm_exit_code == "0" and 
+        final_service == "Running"
+    ) else "⚠️ PARTIAL SUCCESS" if final_service == "Running" else "❌ FAILED"
+    
     result_text = f"""RDP Extension Complete
-Status: {rearm_result.get('status', 'Unknown')}
-Service Status: {rearm_result.get('service_status', 'Unknown')}
-Rearm Code: {rearm_result.get('rearm_exit_code', 'Unknown')}
+{overall_status}
+
+━━━ REARM OPERATION ━━━
+Status: {rearm_status}
+Output: {rearm_output}
+Exit Code: {rearm_exit_code}
+
+━━━ SERVICE RESTART ━━━
+Initial Status: {initial_service}
+After Stop: {service_after_stop}
+After Start: {service_after_start}
+Final Status: {final_service}
+
+━━━ SESSION MANAGEMENT ━━━
+Disconnected Sessions: {len(sessions) if sessions else 'None'}
+{chr(10).join([f"  - Session {s}" for s in sessions]) if sessions else "  - No active sessions found"}
+
+━━━ LICENSE STATUS ━━━
+{new_license.strip()}
+
 Timestamp: {rearm_result.get('timestamp', 'Unknown')}"""
 
     if license_result:
         prev_days = license_result.get('remaining_days', 'Unknown')
         result_text += f"""
 
-Previous Remaining Days: {prev_days}
-Action: License re-armed and RDP restarted"""
+━━━ SUMMARY ━━━
+Previous Days: {prev_days}
+Action Taken: Rearm executed and RDP restarted"""
 
     return result_text
 
