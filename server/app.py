@@ -94,6 +94,92 @@ $data.country
         logger.error(f"Error executing PowerShell script: {str(e)}")
         raise Exception(f"Script execution failed: {str(e)}")
 
+def check_rdp_license_status(target_ip, password):
+    """
+    Check the RDP license status and remaining days
+    """
+    try:
+        logger.info(f"Checking RDP license status for {target_ip}")
+        
+        # Connect to remote Windows machine
+        wsman = WSMan(
+            target_ip,
+            username="Administrator",
+            password=password,
+            ssl=False,
+            auth="basic",
+            encryption="never"
+        )
+
+        # Open a single runspace pool
+        pool = RunspacePool(wsman)
+        pool.open()
+        ps = PowerShell(pool)
+
+        # Check license status
+        ps.add_script('''
+# Get license expiration information
+$licenseStatus = cscript //nologo C:\\Windows\\System32\\slmgr.vbs /dli 2>&1 | Out-String
+
+# Get grace period remaining
+$graceStatus = cscript //nologo C:\\Windows\\System32\\slmgr.vbs /xpr 2>&1 | Out-String
+
+# Parse to find remaining days
+$remainingDays = -1
+$isExpired = $false
+
+if ($graceStatus -match "(\\d+)\\s+day") {
+    $remainingDays = [int]$matches[1]
+} elseif ($graceStatus -match "expired" -or $graceStatus -match "will expire") {
+    $isExpired = $true
+    $remainingDays = 0
+}
+
+# Output results
+Write-Output "LICENSE_STATUS:$licenseStatus"
+Write-Output "GRACE_STATUS:$graceStatus"
+Write-Output "REMAINING_DAYS:$remainingDays"
+Write-Output "IS_EXPIRED:$isExpired"
+''')
+
+        output = ps.invoke()
+        pool.close()
+
+        # Parse the output
+        license_status = ""
+        grace_status = ""
+        remaining_days = -1
+        is_expired = False
+
+        if output:
+            for line in output:
+                line_str = str(line).strip()
+                if line_str.startswith("LICENSE_STATUS:"):
+                    license_status = line_str.replace("LICENSE_STATUS:", "")
+                elif line_str.startswith("GRACE_STATUS:"):
+                    grace_status = line_str.replace("GRACE_STATUS:", "")
+                elif line_str.startswith("REMAINING_DAYS:"):
+                    try:
+                        remaining_days = int(line_str.replace("REMAINING_DAYS:", ""))
+                    except:
+                        remaining_days = -1
+                elif line_str.startswith("IS_EXPIRED:"):
+                    is_expired = line_str.replace("IS_EXPIRED:", "").lower() == "true"
+
+        result = {
+            "license_status": license_status,
+            "grace_status": grace_status,
+            "remaining_days": remaining_days,
+            "is_expired": is_expired,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error checking RDP license: {str(e)}")
+        raise Exception(f"License check failed: {str(e)}")
+
 def execute_rdp_rearm(target_ip, password):
     """
     Execute PowerShell script to extend RDP license using slmgr -rearm and restart RDP service
@@ -120,7 +206,7 @@ def execute_rdp_rearm(target_ip, password):
         ps.add_script('''
 # Re-arm Windows license
 Write-Host "Re-arming Windows license..."
-$rearmResult = Start-Process -FilePath "slmgr.vbs" -ArgumentList "/rearm" -NoNewWindow -Wait -PassThru -RedirectStandardOutput $env:TEMP\\slmgr_output.txt
+$rearmResult = Start-Process -FilePath "slmgr.vbs" -ArgumentList "/rearm" -NoNewWindow -Wait -PassThru
 
 # Stop RDP service
 Write-Host "Stopping Remote Desktop Service..."
@@ -130,9 +216,17 @@ Start-Sleep -Seconds 2
 # Start RDP service
 Write-Host "Starting Remote Desktop Service..."
 Start-Service -Name "TermService" -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
 
 # Get service status
 $service = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
+
+# Restart the RDP connection (disconnect current session)
+Write-Host "Restarting RDP connections..."
+query session | Select-String "rdp-tcp#" | ForEach-Object {
+    $sessionId = ($_ -split "\\s+")[2]
+    logoff $sessionId /server:localhost 2>$null
+}
 
 # Return results
 @{
@@ -284,13 +378,13 @@ def health_check():
         "service": "DashRDP Proxy Configurator API"
     })
 
-@app.route('/api/extend-rdp', methods=['POST'])
-def extend_rdp():
+@app.route('/api/check-rdp-license', methods=['POST'])
+def check_rdp_license():
     """
-    API endpoint to extend RDP license using slmgr -rearm and restart RDP service
+    API endpoint to check RDP license status and remaining days
     """
     try:
-        logger.info("=== RDP EXTENSION REQUEST RECEIVED ===")
+        logger.info("=== RDP LICENSE CHECK REQUEST RECEIVED ===")
         
         # Get JSON data from request
         data = request.get_json()
@@ -312,18 +406,95 @@ def extend_rdp():
                 "error": "Missing required fields: serverIp, password"
             }), 400
 
-        logger.info(f"Received RDP extension request for target_ip: {target_ip}")
+        logger.info(f"Checking RDP license for target_ip: {target_ip}")
 
-        # Execute the RDP extension
-        result = execute_rdp_rearm(target_ip, password)
+        # Check the license status
+        result = check_rdp_license_status(target_ip, password)
 
         # Format the result for the Chrome extension
-        formatted_result = format_rdp_result(result)
+        formatted_result = format_license_check_result(result)
 
         return jsonify({
             "success": True,
-            "result": formatted_result
+            "result": formatted_result,
+            "remaining_days": result.get('remaining_days', -1),
+            "is_expired": result.get('is_expired', False)
         })
+
+    except Exception as e:
+        logger.error(f"RDP license check error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/extend-rdp', methods=['POST'])
+def extend_rdp():
+    """
+    API endpoint to extend RDP license using slmgr -rearm and restart RDP service
+    This endpoint now checks license status first and only rearms if expired
+    """
+    try:
+        logger.info("=== RDP EXTENSION REQUEST RECEIVED ===")
+        
+        # Get JSON data from request
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "No JSON data provided"
+            }), 400
+
+        # Extract required fields
+        target_ip = data.get('serverIp')
+        password = data.get('password')
+        force_rearm = data.get('forceRearm', False)  # Optional flag to force rearm
+
+        # Validate required fields
+        if not all([target_ip, password]):
+            return jsonify({
+                "success": False,
+                "error": "Missing required fields: serverIp, password"
+            }), 400
+
+        logger.info(f"Received RDP extension request for target_ip: {target_ip}")
+
+        # First, check the license status
+        license_result = check_rdp_license_status(target_ip, password)
+        remaining_days = license_result.get('remaining_days', -1)
+        is_expired = license_result.get('is_expired', False)
+
+        logger.info(f"License check - Remaining days: {remaining_days}, Is expired: {is_expired}")
+
+        # Only rearm if expired or force flag is set
+        if is_expired or remaining_days == 0 or force_rearm:
+            logger.info("License is expired or force rearm requested. Proceeding with rearm...")
+            
+            # Execute the RDP extension
+            rearm_result = execute_rdp_rearm(target_ip, password)
+
+            # Format the result for the Chrome extension
+            formatted_result = format_rdp_result(rearm_result, license_result)
+
+            return jsonify({
+                "success": True,
+                "result": formatted_result,
+                "action_taken": "rearm_executed",
+                "previous_remaining_days": remaining_days
+            })
+        else:
+            logger.info(f"License is still valid ({remaining_days} days remaining). No rearm needed.")
+            
+            # Format the result showing license is still valid
+            formatted_result = format_license_valid_result(license_result)
+
+            return jsonify({
+                "success": True,
+                "result": formatted_result,
+                "action_taken": "no_action_needed",
+                "remaining_days": remaining_days
+            })
 
     except Exception as e:
         logger.error(f"RDP extension error: {str(e)}")
@@ -332,14 +503,56 @@ def extend_rdp():
             "error": str(e)
         }), 500
 
-def format_rdp_result(result):
+def format_license_check_result(result):
+    """
+    Format the license check result for the Chrome extension
+    """
+    remaining_days = result.get('remaining_days', -1)
+    is_expired = result.get('is_expired', False)
+    grace_status = result.get('grace_status', 'Unknown')
+    
+    if is_expired or remaining_days == 0:
+        status_text = "⚠️ LICENSE EXPIRED"
+    elif remaining_days > 0:
+        status_text = f"✅ LICENSE ACTIVE"
+    else:
+        status_text = "ℹ️ LICENSE STATUS UNKNOWN"
+    
+    return f"""{status_text}
+Remaining Days: {remaining_days if remaining_days >= 0 else 'Unknown'}
+Grace Status: {grace_status}
+Timestamp: {result.get('timestamp', 'Unknown')}"""
+
+def format_rdp_result(rearm_result, license_result=None):
     """
     Format the RDP extension result for the Chrome extension
     """
-    return f"""RDP Extension Complete
-Status: {result.get('status', 'Unknown')}
-Service Status: {result.get('service_status', 'Unknown')}
-Rearm Code: {result.get('rearm_exit_code', 'Unknown')}
+    result_text = f"""RDP Extension Complete
+Status: {rearm_result.get('status', 'Unknown')}
+Service Status: {rearm_result.get('service_status', 'Unknown')}
+Rearm Code: {rearm_result.get('rearm_exit_code', 'Unknown')}
+Timestamp: {rearm_result.get('timestamp', 'Unknown')}"""
+
+    if license_result:
+        prev_days = license_result.get('remaining_days', 'Unknown')
+        result_text += f"""
+
+Previous Remaining Days: {prev_days}
+Action: License re-armed and RDP restarted"""
+
+    return result_text
+
+def format_license_valid_result(result):
+    """
+    Format the result when license is still valid
+    """
+    remaining_days = result.get('remaining_days', -1)
+    grace_status = result.get('grace_status', 'Unknown')
+    
+    return f"""✅ RDP License Still Valid
+Remaining Days: {remaining_days}
+Grace Status: {grace_status}
+Action: No rearm needed
 Timestamp: {result.get('timestamp', 'Unknown')}"""
 
 @app.route('/', methods=['GET'])
@@ -352,7 +565,8 @@ def root():
         "version": "1.0",
         "endpoints": {
             "POST /api/execute-script": "Execute PowerShell script with proxy configuration",
-            "POST /api/extend-rdp": "Extend RDP license using slmgr -rearm",
+            "POST /api/check-rdp-license": "Check RDP license status and remaining days",
+            "POST /api/extend-rdp": "Check license and extend RDP using slmgr -rearm if expired",
             "GET /api/health": "Health check endpoint"
         },
         "timestamp": datetime.now().isoformat()

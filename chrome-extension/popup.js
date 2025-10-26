@@ -425,19 +425,51 @@ document.addEventListener('DOMContentLoaded', function() {
         showProgress();
 
         try {
-            // Send message to background script
-            const response = await chrome.runtime.sendMessage({
-                action: 'extendRdp',
+            // First, check the license status
+            updateProgress({ step: 1, message: 'Checking RDP license status...', percentage: 20 });
+            
+            const licenseResponse = await chrome.runtime.sendMessage({
+                action: 'checkRdpLicense',
                 data: formData
             });
 
-            if (response.success) {
-                hideProgress();
-                showStatus('RDP extension completed successfully', 'success');
-                showResults(response.result);
+            if (licenseResponse.success) {
+                const remainingDays = licenseResponse.remaining_days;
+                const isExpired = licenseResponse.is_expired;
+
+                updateProgress({ step: 2, message: `License check complete. Days remaining: ${remainingDays}`, percentage: 40 });
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Show license status
+                showResults(licenseResponse.result);
+
+                // Check if we need to rearm
+                if (isExpired || remainingDays === 0) {
+                    updateProgress({ step: 3, message: 'License expired. Executing rearm and restart...', percentage: 60 });
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // Execute the rearm
+                    const rearmResponse = await chrome.runtime.sendMessage({
+                        action: 'extendRdp',
+                        data: formData
+                    });
+
+                    if (rearmResponse.success) {
+                        hideProgress();
+                        showStatus('RDP license re-armed and RDP service restarted successfully', 'success');
+                        showResults(rearmResponse.result);
+                    } else {
+                        hideProgress();
+                        showStatus(`Rearm failed: ${rearmResponse.error}`, 'error');
+                    }
+                } else {
+                    // License is still valid, no need to rearm
+                    hideProgress();
+                    showStatus(`License is still valid (${remainingDays} days remaining). No action needed.`, 'success');
+                }
             } else {
                 hideProgress();
-                showStatus(`Error: ${response.error}`, 'error');
+                showStatus(`License check failed: ${licenseResponse.error}`, 'error');
             }
         } catch (error) {
             hideProgress();

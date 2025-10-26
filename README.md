@@ -8,6 +8,11 @@ A Python Flask API that receives data from the DashRDP Proxy Configurator Chrome
 - **PowerShell Execution**: Uses pypsrp to execute PowerShell scripts on remote Windows machines
 - **Proxy Configuration**: Automatically configures system-wide and user-level proxy settings
 - **IP Information**: Retrieves public IP, ISP, and country information through the configured proxy
+- **RDP License Management**: 🆕 Intelligent RDP license checking and renewal
+  - Automatically checks remaining license days
+  - Only performs rearm when license is expired
+  - Restarts RDP service after rearm
+  - Preserves precious rearm attempts
 - **Error Handling**: Comprehensive error handling and logging
 - **API Key Authentication**: Secure API key-based authentication
 
@@ -148,6 +153,61 @@ X-API-Key: your-secret-api-key-here
 }
 ```
 
+### POST /api/check-rdp-license 🆕
+
+Checks RDP license status without making changes.
+
+**Request Body:**
+```json
+{
+    "serverIp": "192.168.1.100",
+    "password": "admin_password"
+}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "result": "✅ LICENSE ACTIVE\nRemaining Days: 45\nGrace Status: ...\nTimestamp: ...",
+    "remaining_days": 45,
+    "is_expired": false
+}
+```
+
+### POST /api/extend-rdp 🆕
+
+Checks license and extends RDP license if expired.
+
+**Request Body:**
+```json
+{
+    "serverIp": "192.168.1.100",
+    "password": "admin_password",
+    "forceRearm": false
+}
+```
+
+**Response (if license valid):**
+```json
+{
+    "success": true,
+    "result": "✅ RDP License Still Valid\nRemaining Days: 45\nAction: No rearm needed\n...",
+    "action_taken": "no_action_needed",
+    "remaining_days": 45
+}
+```
+
+**Response (if license expired):**
+```json
+{
+    "success": true,
+    "result": "RDP Extension Complete\nStatus: Success\nService Status: Running\n...",
+    "action_taken": "rearm_executed",
+    "previous_remaining_days": 0
+}
+```
+
 ### GET /api/health
 
 Health check endpoint.
@@ -234,6 +294,21 @@ curl -X POST http://localhost:5000/api/execute-script \
     "proxyIpPort": "192.168.1.200:8080"
   }'
 ```
+
+## RDP License Management 🆕
+
+For detailed documentation on the RDP License Management feature, see:
+- **[Quick Start Guide](QUICK_START_RDP_LICENSE.md)** - Get started quickly
+- **[Comprehensive Documentation](RDP_LICENSE_MANAGEMENT.md)** - Full feature documentation
+- **[Changelog](CHANGELOG.md)** - All changes and technical details
+
+### Key Features:
+✅ Automatic license status checking  
+✅ Smart rearm decision (only when expired)  
+✅ RDP service restart after rearm  
+✅ Session disconnect for license refresh  
+✅ Remaining days display  
+✅ Force rearm option  
 
 ## License
 

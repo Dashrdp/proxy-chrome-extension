@@ -25,6 +25,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponse({ success: false, error: error.message });
             });
         return true; // Will respond asynchronously
+    } else if (message.action === 'checkRdpLicense') {
+        checkRdpLicense(message.data, (progress) => {
+            // Send progress updates to popup
+            chrome.runtime.sendMessage({
+                action: 'progressUpdate',
+                progress: progress
+            }).catch(() => {
+                // Popup might be closed, that's ok
+            });
+        })
+            .then(result => {
+                sendResponse({ success: true, result: result.result, remaining_days: result.remaining_days, is_expired: result.is_expired });
+            })
+            .catch(error => {
+                sendResponse({ success: false, error: error.message });
+            });
+        return true; // Will respond asynchronously
     } else if (message.action === 'extendRdp') {
         executeRdpExtension(message.data, (progress) => {
             // Send progress updates to popup
@@ -235,6 +252,41 @@ async function executeViaRemoteServer(data, progressCallback) {
     }
 }
 
+// Check RDP License function
+async function checkRdpLicense(data, progressCallback) {
+    const { serverIp, password } = data;
+    
+    try {
+        // Send progress updates
+        if (progressCallback) {
+            progressCallback({ step: 1, message: 'Validating input data...', percentage: 10 });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            progressCallback({ step: 2, message: 'Connecting to server...', percentage: 30 });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            progressCallback({ step: 3, message: 'Checking RDP license status...', percentage: 60 });
+        }
+        
+        const result = await executeViaRemoteServerCheckLicense(data, progressCallback);
+        
+        if (progressCallback) {
+            progressCallback({ step: 4, message: 'Processing results...', percentage: 90 });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            progressCallback({ step: 5, message: 'Complete!', percentage: 100 });
+        }
+        
+        return result;
+        
+    } catch (error) {
+        if (progressCallback) {
+            progressCallback({ step: -1, message: 'Error: ' + error.message, percentage: 0 });
+        }
+        throw new Error(`License check failed: ${error.message}`);
+    }
+}
+
 // RDP Extension function
 async function executeRdpExtension(data, progressCallback) {
     const { serverIp, password } = data;
@@ -248,7 +300,7 @@ async function executeRdpExtension(data, progressCallback) {
             progressCallback({ step: 2, message: 'Connecting to server...', percentage: 30 });
             await new Promise(resolve => setTimeout(resolve, 500));
             
-            progressCallback({ step: 3, message: 'Executing RDP extension...', percentage: 60 });
+            progressCallback({ step: 3, message: 'Checking license and extending if needed...', percentage: 60 });
         }
         
         const result = await executeViaRemoteServerRDP(data, progressCallback);
@@ -267,6 +319,78 @@ async function executeRdpExtension(data, progressCallback) {
             progressCallback({ step: -1, message: 'Error: ' + error.message, percentage: 0 });
         }
         throw new Error(`RDP extension failed: ${error.message}`);
+    }
+}
+
+async function executeViaRemoteServerCheckLicense(data, progressCallback) {
+    try {
+        console.log('=== CHROME EXTENSION RDP LICENSE CHECK DEBUG ===');
+        console.log('Making RDP license check request to server:', SERVER_CONFIG.url);
+        console.log('Request data:', data);
+        
+        if (progressCallback) {
+            progressCallback({ step: 3, message: 'Sending request to server...', percentage: 65 });
+        }
+        
+        const response = await fetch(`${SERVER_CONFIG.url}/api/check-rdp-license`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (progressCallback) {
+            progressCallback({ step: 3, message: 'Receiving response from server...', percentage: 80 });
+        }
+        
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        let responseData;
+        
+        if (contentType && contentType.includes('application/json')) {
+            responseData = await response.json();
+        } else {
+            // Response is not JSON, likely an HTML error page
+            const textResponse = await response.text();
+            console.error('Server returned non-JSON response:', textResponse.substring(0, 200));
+            throw new Error(`Server returned invalid response (${response.status}). Please check if the server is running correctly.`);
+        }
+        
+        console.log('=== SERVER LICENSE CHECK RESPONSE ===');
+        console.log('Response status:', response.status);
+        console.log('Response data:', responseData);
+        
+        if (!response.ok) {
+            console.error('Server returned error status:', response.status);
+            console.error('Error response:', responseData);
+            
+            // Special handling for 404 - endpoint not deployed
+            if (response.status === 404) {
+                throw new Error(`The /api/check-rdp-license endpoint is not available on the server. Please contact the administrator to deploy the latest server code.`);
+            }
+            
+            throw new Error(responseData.error || `Server error: ${response.status}`);
+        }
+        
+        if (responseData.success) {
+            console.log('Success! License check result:', responseData);
+            return {
+                result: responseData.result,
+                remaining_days: responseData.remaining_days,
+                is_expired: responseData.is_expired
+            };
+        } else {
+            console.error('Server reported failure:', responseData.error);
+            throw new Error(responseData.error || 'Unknown server error');
+        }
+    } catch (error) {
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            throw new Error(`Cannot connect to server at ${SERVER_CONFIG.url}. Please check the server URL and ensure the server is running.`);
+        } else if (error.message.includes('not valid JSON') || error.message.includes('Unexpected token')) {
+            throw new Error(`Server returned invalid response. The server may be returning an error page instead of JSON. Please check if the server is running correctly.`);
+        }
+        throw error;
     }
 }
 
