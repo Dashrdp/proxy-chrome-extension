@@ -189,7 +189,18 @@ async function executeViaRemoteServer(data, progressCallback) {
             progressCallback({ step: 3, message: 'Receiving response from server...', percentage: 80 });
         }
         
-        const responseData = await response.json();
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        let responseData;
+        
+        if (contentType && contentType.includes('application/json')) {
+            responseData = await response.json();
+        } else {
+            // Response is not JSON, likely an HTML error page
+            const textResponse = await response.text();
+            console.error('Server returned non-JSON response:', textResponse.substring(0, 200));
+            throw new Error(`Server returned invalid response (${response.status}). Please check if the server is running correctly.`);
+        }
         
         console.log('=== SERVER RESPONSE DEBUG ===');
         console.log('Response status:', response.status);
@@ -198,6 +209,12 @@ async function executeViaRemoteServer(data, progressCallback) {
         if (!response.ok) {
             console.error('Server returned error status:', response.status);
             console.error('Error response:', responseData);
+            
+            // Special handling for 404 - endpoint not deployed
+            if (response.status === 404) {
+                throw new Error(`The /api/extend-rdp endpoint is not available on the server. Please contact the administrator to deploy the latest server code with the RDP extension feature.`);
+            }
+            
             throw new Error(responseData.error || `Server error: ${response.status}`);
         }
         
@@ -211,6 +228,8 @@ async function executeViaRemoteServer(data, progressCallback) {
     } catch (error) {
         if (error.name === 'TypeError' && error.message.includes('fetch')) {
             throw new Error(`Cannot connect to server at ${SERVER_CONFIG.url}. Please check the server URL and ensure the server is running.`);
+        } else if (error.message.includes('not valid JSON') || error.message.includes('Unexpected token')) {
+            throw new Error(`Server returned invalid response. The server may be returning an error page instead of JSON. Please check if the server is running correctly.`);
         }
         throw error;
     }
@@ -273,7 +292,18 @@ async function executeViaRemoteServerRDP(data, progressCallback) {
             progressCallback({ step: 3, message: 'Receiving response from server...', percentage: 80 });
         }
         
-        const responseData = await response.json();
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        let responseData;
+        
+        if (contentType && contentType.includes('application/json')) {
+            responseData = await response.json();
+        } else {
+            // Response is not JSON, likely an HTML error page
+            const textResponse = await response.text();
+            console.error('Server returned non-JSON response:', textResponse.substring(0, 200));
+            throw new Error(`Server returned invalid response (${response.status}). Please check if the server is running correctly.`);
+        }
         
         console.log('=== SERVER RDP EXTENSION RESPONSE ===');
         console.log('Response status:', response.status);
@@ -282,6 +312,12 @@ async function executeViaRemoteServerRDP(data, progressCallback) {
         if (!response.ok) {
             console.error('Server returned error status:', response.status);
             console.error('Error response:', responseData);
+            
+            // Special handling for 404 - endpoint not deployed
+            if (response.status === 404) {
+                throw new Error(`The /api/extend-rdp endpoint is not available on the server. Please contact the administrator to deploy the latest server code with the RDP extension feature.`);
+            }
+            
             throw new Error(responseData.error || `Server error: ${response.status}`);
         }
         
@@ -295,6 +331,8 @@ async function executeViaRemoteServerRDP(data, progressCallback) {
     } catch (error) {
         if (error.name === 'TypeError' && error.message.includes('fetch')) {
             throw new Error(`Cannot connect to server at ${SERVER_CONFIG.url}. Please check the server URL and ensure the server is running.`);
+        } else if (error.message.includes('not valid JSON') || error.message.includes('Unexpected token')) {
+            throw new Error(`Server returned invalid response. The server may be returning an error page instead of JSON. Please check if the server is running correctly.`);
         }
         throw error;
     }
