@@ -451,6 +451,59 @@ button:hover::before {
     transform: translateY(-1px);
 }
 
+.btn-rdp {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.btn-rdp:hover {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(37, 99, 235, 0.2) 100%);
+    border-color: rgba(59, 130, 246, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.btn-rdp:disabled {
+    background: rgba(59, 130, 246, 0.05);
+    color: rgba(96, 165, 250, 0.4);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.rdp-extension-section {
+    margin: 16px 20px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.section-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.1) 50%, transparent 100%);
+    margin: 16px 0;
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+
+.section-description {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 12px;
+}
+
+.rdp-extension-section button {
+    width: 100%;
+    margin-top: 8px;
+}
+
 .btn-security {
     background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%);
     color: #22c55e;

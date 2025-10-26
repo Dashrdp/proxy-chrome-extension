@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('proxyForm');
     const executeBtn = document.getElementById('executeBtn');
     const extractBtn = document.getElementById('extractBtn');
+    const rdpExtendBtn = document.getElementById('rdpExtendBtn');
     const status = document.getElementById('status');
     const results = document.getElementById('results');
     const output = document.getElementById('output');
@@ -39,6 +40,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Extract button handler
     extractBtn.addEventListener('click', function() {
         extractFieldsFromPage();
+    });
+
+    // RDP Extension button handler
+    rdpExtendBtn.addEventListener('click', function() {
+        executeRdpExtension();
     });
 
     // Removed verify access button handler
@@ -394,4 +400,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Check health every 30 seconds
     setInterval(checkAPIHealth, 30000);
+
+    async function executeRdpExtension() {
+        const formData = {
+            serverIp: document.getElementById('serverIp').value,
+            password: document.getElementById('password').value
+        };
+
+        // Validate inputs
+        if (!formData.serverIp || !formData.password) {
+            showStatus('Please fill in Server IP and Password', 'error');
+            return;
+        }
+
+        // Validate IP format
+        if (!isValidIP(formData.serverIp)) {
+            showStatus('Please enter a valid IP address', 'error');
+            return;
+        }
+
+        rdpExtendBtn.disabled = true;
+        hideStatus();
+        hideResults();
+        showProgress();
+
+        try {
+            // Send message to background script
+            const response = await chrome.runtime.sendMessage({
+                action: 'extendRdp',
+                data: formData
+            });
+
+            if (response.success) {
+                hideProgress();
+                showStatus('RDP extension completed successfully', 'success');
+                showResults(response.result);
+            } else {
+                hideProgress();
+                showStatus(`Error: ${response.error}`, 'error');
+            }
+        } catch (error) {
+            hideProgress();
+            showStatus(`Connection error: ${error.message}`, 'error');
+        } finally {
+            rdpExtendBtn.disabled = false;
+        }
+    }
 });

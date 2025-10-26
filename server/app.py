@@ -94,6 +94,85 @@ $data.country
         logger.error(f"Error executing PowerShell script: {str(e)}")
         raise Exception(f"Script execution failed: {str(e)}")
 
+def execute_rdp_rearm(target_ip, password):
+    """
+    Execute PowerShell script to extend RDP license using slmgr -rearm and restart RDP service
+    """
+    try:
+        logger.info(f"Connecting to {target_ip} for RDP extension")
+        
+        # Connect to remote Windows machine
+        wsman = WSMan(
+            target_ip,
+            username="Administrator",
+            password=password,
+            ssl=False,
+            auth="basic",
+            encryption="never"
+        )
+
+        # Open a single runspace pool
+        pool = RunspacePool(wsman)
+        pool.open()
+        ps = PowerShell(pool)
+
+        # Execute RDP extension commands
+        ps.add_script('''
+# Re-arm Windows license
+Write-Host "Re-arming Windows license..."
+$rearmResult = Start-Process -FilePath "slmgr.vbs" -ArgumentList "/rearm" -NoNewWindow -Wait -PassThru -RedirectStandardOutput $env:TEMP\\slmgr_output.txt
+
+# Stop RDP service
+Write-Host "Stopping Remote Desktop Service..."
+Stop-Service -Name "TermService" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+
+# Start RDP service
+Write-Host "Starting Remote Desktop Service..."
+Start-Service -Name "TermService" -ErrorAction SilentlyContinue
+
+# Get service status
+$service = Get-Service -Name "TermService" -ErrorAction SilentlyContinue
+
+# Return results
+@{
+    Status = "Success"
+    ServiceStatus = $service.Status
+    RearmExitCode = $rearmResult.ExitCode
+    Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+}
+''')
+
+        output = ps.invoke()
+        pool.close()
+
+        # Parse the output
+        if output and len(output) > 0:
+            result_dict = {}
+            for item in output:
+                if hasattr(item, 'properties'):
+                    for key, value in item.properties.items():
+                        result_dict[key] = str(value)
+            
+            result = {
+                "status": result_dict.get('Status', 'Unknown'),
+                "service_status": result_dict.get('ServiceStatus', 'Unknown'),
+                "rearm_exit_code": result_dict.get('RearmExitCode', 'Unknown'),
+                "timestamp": result_dict.get('Timestamp', datetime.now().isoformat())
+            }
+        else:
+            result = {
+                "status": "Success",
+                "service_status": "Running",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error executing RDP rearm: {str(e)}")
+        raise Exception(f"RDP rearm failed: {str(e)}")
+
 @app.route('/api/execute-script', methods=['POST'])
 def execute_script():
     """
@@ -205,6 +284,64 @@ def health_check():
         "service": "DashRDP Proxy Configurator API"
     })
 
+@app.route('/api/extend-rdp', methods=['POST'])
+def extend_rdp():
+    """
+    API endpoint to extend RDP license using slmgr -rearm and restart RDP service
+    """
+    try:
+        logger.info("=== RDP EXTENSION REQUEST RECEIVED ===")
+        
+        # Get JSON data from request
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "No JSON data provided"
+            }), 400
+
+        # Extract required fields
+        target_ip = data.get('serverIp')
+        password = data.get('password')
+
+        # Validate required fields
+        if not all([target_ip, password]):
+            return jsonify({
+                "success": False,
+                "error": "Missing required fields: serverIp, password"
+            }), 400
+
+        logger.info(f"Received RDP extension request for target_ip: {target_ip}")
+
+        # Execute the RDP extension
+        result = execute_rdp_rearm(target_ip, password)
+
+        # Format the result for the Chrome extension
+        formatted_result = format_rdp_result(result)
+
+        return jsonify({
+            "success": True,
+            "result": formatted_result
+        })
+
+    except Exception as e:
+        logger.error(f"RDP extension error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+def format_rdp_result(result):
+    """
+    Format the RDP extension result for the Chrome extension
+    """
+    return f"""RDP Extension Complete
+Status: {result.get('status', 'Unknown')}
+Service Status: {result.get('service_status', 'Unknown')}
+Rearm Code: {result.get('rearm_exit_code', 'Unknown')}
+Timestamp: {result.get('timestamp', 'Unknown')}"""
+
 @app.route('/', methods=['GET'])
 def root():
     """
@@ -215,6 +352,7 @@ def root():
         "version": "1.0",
         "endpoints": {
             "POST /api/execute-script": "Execute PowerShell script with proxy configuration",
+            "POST /api/extend-rdp": "Extend RDP license using slmgr -rearm",
             "GET /api/health": "Health check endpoint"
         },
         "timestamp": datetime.now().isoformat()

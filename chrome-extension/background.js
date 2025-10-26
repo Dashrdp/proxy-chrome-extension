@@ -25,6 +25,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponse({ success: false, error: error.message });
             });
         return true; // Will respond asynchronously
+    } else if (message.action === 'extendRdp') {
+        executeRdpExtension(message.data, (progress) => {
+            // Send progress updates to popup
+            chrome.runtime.sendMessage({
+                action: 'progressUpdate',
+                progress: progress
+            }).catch(() => {
+                // Popup might be closed, that's ok
+            });
+        })
+            .then(result => {
+                sendResponse({ success: true, result: result });
+            })
+            .catch(error => {
+                sendResponse({ success: false, error: error.message });
+            });
+        return true; // Will respond asynchronously
     } else if (message.action === 'healthCheck') {
         checkAPIHealth()
             .then(result => {
@@ -186,6 +203,90 @@ async function executeViaRemoteServer(data, progressCallback) {
         
         if (responseData.success) {
             console.log('Success! Response result:', responseData.result);
+            return responseData.result;
+        } else {
+            console.error('Server reported failure:', responseData.error);
+            throw new Error(responseData.error || 'Unknown server error');
+        }
+    } catch (error) {
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            throw new Error(`Cannot connect to server at ${SERVER_CONFIG.url}. Please check the server URL and ensure the server is running.`);
+        }
+        throw error;
+    }
+}
+
+// RDP Extension function
+async function executeRdpExtension(data, progressCallback) {
+    const { serverIp, password } = data;
+    
+    try {
+        // Send progress updates
+        if (progressCallback) {
+            progressCallback({ step: 1, message: 'Validating input data...', percentage: 10 });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            progressCallback({ step: 2, message: 'Connecting to server...', percentage: 30 });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            progressCallback({ step: 3, message: 'Executing RDP extension...', percentage: 60 });
+        }
+        
+        const result = await executeViaRemoteServerRDP(data, progressCallback);
+        
+        if (progressCallback) {
+            progressCallback({ step: 4, message: 'Processing results...', percentage: 90 });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            progressCallback({ step: 5, message: 'Complete!', percentage: 100 });
+        }
+        
+        return result;
+        
+    } catch (error) {
+        if (progressCallback) {
+            progressCallback({ step: -1, message: 'Error: ' + error.message, percentage: 0 });
+        }
+        throw new Error(`RDP extension failed: ${error.message}`);
+    }
+}
+
+async function executeViaRemoteServerRDP(data, progressCallback) {
+    try {
+        console.log('=== CHROME EXTENSION RDP EXTENSION DEBUG ===');
+        console.log('Making RDP extension request to server:', SERVER_CONFIG.url);
+        console.log('Request data:', data);
+        
+        if (progressCallback) {
+            progressCallback({ step: 3, message: 'Sending request to server...', percentage: 65 });
+        }
+        
+        const response = await fetch(`${SERVER_CONFIG.url}/api/extend-rdp`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (progressCallback) {
+            progressCallback({ step: 3, message: 'Receiving response from server...', percentage: 80 });
+        }
+        
+        const responseData = await response.json();
+        
+        console.log('=== SERVER RDP EXTENSION RESPONSE ===');
+        console.log('Response status:', response.status);
+        console.log('Response data:', responseData);
+        
+        if (!response.ok) {
+            console.error('Server returned error status:', response.status);
+            console.error('Error response:', responseData);
+            throw new Error(responseData.error || `Server error: ${response.status}`);
+        }
+        
+        if (responseData.success) {
+            console.log('Success! RDP extension result:', responseData.result);
             return responseData.result;
         } else {
             console.error('Server reported failure:', responseData.error);
