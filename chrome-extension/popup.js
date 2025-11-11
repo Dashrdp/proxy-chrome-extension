@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('proxyForm');
     const executeBtn = document.getElementById('executeBtn');
     const extractBtn = document.getElementById('extractBtn');
-    const rdpExtendBtn = document.getElementById('rdpExtendBtn');
     const status = document.getElementById('status');
     const results = document.getElementById('results');
     const output = document.getElementById('output');
@@ -40,11 +39,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Extract button handler
     extractBtn.addEventListener('click', function() {
         extractFieldsFromPage();
-    });
-
-    // RDP Extension button handler
-    rdpExtendBtn.addEventListener('click', function() {
-        executeRdpExtension();
     });
 
     // Removed verify access button handler
@@ -400,97 +394,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Check health every 30 seconds
     setInterval(checkAPIHealth, 30000);
-
-    async function executeRdpExtension() {
-        const formData = {
-            serverIp: document.getElementById('serverIp').value,
-            password: document.getElementById('password').value
-        };
-
-        // Validate inputs
-        if (!formData.serverIp || !formData.password) {
-            showStatus('Please fill in Server IP and Password', 'error');
-            return;
-        }
-
-        // Validate IP format
-        if (!isValidIP(formData.serverIp)) {
-            showStatus('Please enter a valid IP address', 'error');
-            return;
-        }
-
-        rdpExtendBtn.disabled = true;
-        hideStatus();
-        hideResults();
-        showProgress();
-
-        try {
-            // First, check the license status
-            updateProgress({ step: 1, message: 'Checking RDP license status...', percentage: 20 });
-            
-            const licenseResponse = await chrome.runtime.sendMessage({
-                action: 'checkRdpLicense',
-                data: formData
-            });
-
-            if (licenseResponse.success) {
-                const remainingDays = licenseResponse.remaining_days;
-                const isExpired = licenseResponse.is_expired;
-                const needsRearm = licenseResponse.needs_rearm;
-
-                const daysDisplay = remainingDays >= 0 ? remainingDays : 'Unknown';
-                updateProgress({ step: 2, message: `License check complete. Days remaining: ${daysDisplay}`, percentage: 40 });
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                // Show license status
-                showResults(licenseResponse.result);
-
-                // Check if we need to rearm (expires soon, unknown, or expired)
-                const shouldRearm = needsRearm || isExpired || remainingDays === -1 || (remainingDays >= 0 && remainingDays < 30);
-
-                if (shouldRearm) {
-                    let rearmReason = '';
-                    if (remainingDays === -1) {
-                        rearmReason = 'Cannot determine remaining days';
-                    } else if (isExpired || remainingDays === 0) {
-                        rearmReason = 'License expired';
-                    } else if (remainingDays < 30) {
-                        rearmReason = `Less than 30 days remaining (${remainingDays} days)`;
-                    } else if (needsRearm) {
-                        rearmReason = 'License in notification mode';
-                    }
-
-                    updateProgress({ step: 3, message: `${rearmReason}. Executing rearm and restart...`, percentage: 60 });
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    // Execute the rearm
-                    const rearmResponse = await chrome.runtime.sendMessage({
-                        action: 'extendRdp',
-                        data: formData
-                    });
-
-                    if (rearmResponse.success) {
-                        hideProgress();
-                        showStatus('RDP license re-armed and RDP service restarted successfully', 'success');
-                        showResults(rearmResponse.result);
-                    } else {
-                        hideProgress();
-                        showStatus(`Rearm failed: ${rearmResponse.error}`, 'error');
-                    }
-                } else {
-                    // License is still valid (30+ days), no need to rearm
-                    hideProgress();
-                    showStatus(`License is still valid (${remainingDays} days remaining). No action needed.`, 'success');
-                }
-            } else {
-                hideProgress();
-                showStatus(`License check failed: ${licenseResponse.error}`, 'error');
-            }
-        } catch (error) {
-            hideProgress();
-            showStatus(`Connection error: ${error.message}`, 'error');
-        } finally {
-            rdpExtendBtn.disabled = false;
-        }
-    }
 });
