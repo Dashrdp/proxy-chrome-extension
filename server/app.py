@@ -3,9 +3,7 @@ from pypsrp.wsman import WSMan
 from pypsrp.powershell import PowerShell, RunspacePool
 import json
 import logging
-import subprocess
 import os
-import threading
 from datetime import datetime
 # Removed complex imports for simplicity
 
@@ -14,9 +12,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
-# Webhook secret for deployment (set via environment variable or use default)
-WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', 'change-this-secret-in-production')
 
 # Simplified configuration - no API keys needed
 
@@ -217,7 +212,9 @@ def get_timezone_utc_offset_minutes(iana_timezone):
 
 def execute_powershell_script(target_ip, password, proxy_ip_port, browser_timezone=None, utc_offset=None):
     """
-    Execute the PowerShell script to configure proxy, get public IP information, and sync timezone
+    Execute the PowerShell script to configure proxy, get public IP information, and sync timezone.
+    Timezone is primarily determined from ipinfo.io API response, with fallback to country-based
+    timezone or browser timezone if ipinfo timezone is unavailable.
     """
     try:
         logger.info(f"Connecting to {target_ip} with proxy {proxy_ip_port}")
@@ -239,7 +236,7 @@ def execute_powershell_script(target_ip, password, proxy_ip_port, browser_timezo
         pool.open()
         ps = PowerShell(pool)
 
-        # Step 1: Set proxy and get public IP, ISP, country
+        # Step 1: Set proxy and get public IP, ISP, country, and timezone
         ps.add_script(f'''
 # Set system-wide and current user proxy
 Set-ItemProperty -Path "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" ProxyEnable -Value 1
@@ -247,12 +244,13 @@ Set-ItemProperty -Path "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Int
 Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" ProxyEnable -Value 1
 Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" ProxyServer -Value "{proxy_ip_port}"
 
-# Get public IP, ISP, and country
+# Get public IP, ISP, country, and timezone
 $response = Invoke-WebRequest -Uri "https://ipinfo.io/json" -UseBasicParsing
 $data = $response.Content | ConvertFrom-Json
 $data.ip
 $data.org
 $data.country
+$data.timezone
 ''')
 
         output = ps.invoke()
@@ -269,6 +267,12 @@ $data.country
         public_ip = output[0].strip()
         isp = output[1].strip()
         country = output[2].strip()
+        # Get timezone from ipinfo.io (4th output, may be None if not available)
+        ipinfo_timezone = output[3].strip() if len(output) >= 4 and output[3] else None
+        if ipinfo_timezone:
+            logger.info(f"ipinfo.io timezone: {ipinfo_timezone}")
+        else:
+            logger.info("ipinfo.io timezone not available")
 
         # Initialize timezone variables
         current_timezone = None
@@ -277,8 +281,8 @@ $data.country
         timezone_changed = False
         timezone_sync_status = "Not attempted"
 
-        # Step 2: Timezone synchronization (only if proxy is active and browser timezone provided)
-        if public_ip != target_ip and browser_timezone:
+        # Step 2: Timezone synchronization (only if proxy is active)
+        if public_ip != target_ip:
             try:
                 # Get current system timezone
                 ps2 = PowerShell(pool)
@@ -288,27 +292,41 @@ $data.country
                     current_timezone = tz_output[0].strip()
                     logger.info(f"Current system timezone: {current_timezone}")
 
-                # Determine target timezone
-                browser_windows_tz = iana_to_windows_timezone(browser_timezone)
-                country_windows_tz = country_to_timezone(country)
-                
-                # Validate browser timezone matches country using UTC offset
-                browser_offset = utc_offset if utc_offset is not None else get_timezone_utc_offset_minutes(browser_timezone)
-                country_offset = get_timezone_utc_offset_minutes(browser_timezone)  # Approximate
-                
-                # If browser timezone matches country (same UTC offset range), use browser timezone
-                # Otherwise use country's default timezone
-                if browser_windows_tz and country_windows_tz:
-                    # Simple validation: if browser timezone exists in mapping, prefer it
-                    # For more accurate validation, we'd need proper timezone library
-                    target_timezone = browser_windows_tz
-                    timezone_sync_status = "Browser timezone matched"
-                elif country_windows_tz:
-                    target_timezone = country_windows_tz
-                    timezone_sync_status = "Using country default timezone"
-                elif browser_windows_tz:
-                    target_timezone = browser_windows_tz
-                    timezone_sync_status = "Using browser timezone"
+                # Determine target timezone - use ipinfo timezone as primary source
+                if ipinfo_timezone:
+                    # Convert IANA timezone from ipinfo to Windows timezone
+                    target_timezone = iana_to_windows_timezone(ipinfo_timezone)
+                    if target_timezone:
+                        timezone_sync_status = f"Using ipinfo timezone: {ipinfo_timezone}"
+                        logger.info(f"ipinfo timezone: {ipinfo_timezone} -> Windows timezone: {target_timezone}")
+                    else:
+                        # Fallback to country-based timezone if IANA conversion fails
+                        target_timezone = country_to_timezone(country)
+                        if target_timezone:
+                            timezone_sync_status = f"ipinfo timezone not mapped, using country default: {country}"
+                            logger.info(f"ipinfo timezone {ipinfo_timezone} not in mapping, using country {country} -> {target_timezone}")
+                        else:
+                            timezone_sync_status = f"Could not determine timezone from ipinfo ({ipinfo_timezone}) or country ({country})"
+                            logger.warning(f"Could not map timezone: ipinfo={ipinfo_timezone}, country={country}")
+                else:
+                    # Fallback to country-based timezone if ipinfo doesn't provide timezone
+                    target_timezone = country_to_timezone(country)
+                    if target_timezone:
+                        timezone_sync_status = f"ipinfo timezone not available, using country default: {country}"
+                        logger.info(f"ipinfo timezone not available, using country {country} -> {target_timezone}")
+                    else:
+                        # Last resort: use browser timezone if provided
+                        if browser_timezone:
+                            target_timezone = iana_to_windows_timezone(browser_timezone)
+                            if target_timezone:
+                                timezone_sync_status = f"Using browser timezone as fallback: {browser_timezone}"
+                                logger.info(f"Using browser timezone fallback: {browser_timezone} -> {target_timezone}")
+                            else:
+                                timezone_sync_status = "Could not determine timezone from any source"
+                                logger.warning("Could not determine timezone from ipinfo, country, or browser")
+                        else:
+                            timezone_sync_status = "Could not determine timezone (ipinfo unavailable, no browser timezone)"
+                            logger.warning("Could not determine timezone: ipinfo unavailable and no browser timezone provided")
                 
                 # Set timezone if different from current
                 if target_timezone and current_timezone != target_timezone:
@@ -365,6 +383,7 @@ $data.country
                     "new": new_timezone,
                     "changed": timezone_changed,
                     "sync_status": timezone_sync_status,
+                    "ipinfo_timezone": ipinfo_timezone,
                     "browser_timezone": browser_timezone
                 }
             }
@@ -453,11 +472,13 @@ Status: {result['status']}"""
             output += f"""
 
 Timezone Information:
+IPInfo Timezone: {tz.get('ipinfo_timezone', 'N/A')}
 Current Timezone: {tz.get('current', 'N/A')}
 Target Timezone: {tz.get('target', 'N/A')}
 New Timezone: {tz.get('new', 'N/A')}
-Browser Timezone: {tz.get('browser_timezone', 'N/A')}
 Sync Status: {tz.get('sync_status', 'N/A')}"""
+            if tz.get('browser_timezone'):
+                output += f"\nBrowser Timezone (fallback): {tz.get('browser_timezone', 'N/A')}"
             if tz.get('changed'):
                 output += "\n✓ Timezone was changed successfully"
         
@@ -507,88 +528,6 @@ def health_check():
         "timestamp": datetime.now().isoformat(),
         "service": "DashRDP Proxy Configurator API"
     })
-
-
-@app.route('/api/deploy', methods=['POST'])
-def deploy_webhook():
-    """
-    Webhook endpoint for CI/CD deployment
-    Validates webhook secret and triggers deployment script
-    """
-    try:
-        # Validate webhook secret
-        webhook_secret = request.headers.get('X-Webhook-Secret')
-        if not webhook_secret or webhook_secret != WEBHOOK_SECRET:
-            logger.warning("Deployment webhook called with invalid or missing secret")
-            return jsonify({
-                "success": False,
-                "error": "Invalid webhook secret"
-            }), 401
-        
-        # Get deployment info from request
-        data = request.get_json() or {}
-        ref = data.get('ref', 'unknown')
-        sha = data.get('sha', 'unknown')
-        repository = data.get('repository', 'unknown')
-        pusher = data.get('pusher', 'unknown')
-        
-        logger.info(f"Deployment webhook triggered by {pusher} for {repository}@{ref[:7]}")
-        
-        # Get the project root directory (parent of server directory)
-        # When running in Docker, we need to access the mounted volume
-        project_root = os.environ.get('PROJECT_ROOT', '/project')
-        deploy_script = os.path.join(project_root, 'server', 'deploy.sh')
-        
-        # Check if deploy script exists
-        if not os.path.exists(deploy_script):
-            logger.error(f"Deployment script not found at {deploy_script}")
-            return jsonify({
-                "success": False,
-                "error": f"Deployment script not found at {deploy_script}"
-            }), 500
-        
-        # Execute deployment script in background
-        def run_deployment():
-            try:
-                logger.info(f"Starting deployment script: {deploy_script}")
-                result = subprocess.run(
-                    ['bash', deploy_script],
-                    cwd=os.path.join(project_root, 'server'),
-                    capture_output=True,
-                    text=True,
-                    timeout=300  # 5 minute timeout
-                )
-                if result.returncode == 0:
-                    logger.info("Deployment completed successfully")
-                    logger.info(f"Deployment output: {result.stdout}")
-                else:
-                    logger.error(f"Deployment failed with return code {result.returncode}")
-                    logger.error(f"Deployment error: {result.stderr}")
-            except subprocess.TimeoutExpired:
-                logger.error("Deployment script timed out after 5 minutes")
-            except Exception as e:
-                logger.error(f"Error running deployment script: {str(e)}")
-        
-        # Run deployment in background thread
-        deployment_thread = threading.Thread(target=run_deployment, daemon=True)
-        deployment_thread.start()
-        
-        return jsonify({
-            "success": True,
-            "message": "Deployment triggered successfully",
-            "repository": repository,
-            "ref": ref,
-            "sha": sha[:7],
-            "pusher": pusher,
-            "timestamp": datetime.now().isoformat()
-        }), 202  # 202 Accepted - request accepted for processing
-        
-    except Exception as e:
-        logger.error(f"Deployment webhook error: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
 
 
 @app.route('/', methods=['GET'])

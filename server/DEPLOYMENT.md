@@ -54,60 +54,9 @@ docker compose up -d
 docker compose ps
 ```
 
-### 3. Configure API Key and Webhook Secret
+### 3. Manual Deployment
 
-```bash
-# Set webhook secret for CI/CD (required for automatic deployment)
-export WEBHOOK_SECRET="your-strong-webhook-secret-here"
-
-# Generate a secure webhook secret:
-openssl rand -hex 32
-
-# Start services with webhook secret
-docker compose up -d
-```
-
-### 4. Set Up CI/CD Pipeline (Automatic Deployment)
-
-The application includes automatic deployment via GitHub Actions. When you push code to the `main` branch, it will automatically deploy to your server.
-
-#### 4.1. Configure GitHub Secrets
-
-1. Go to your GitHub repository
-2. Navigate to **Settings** → **Secrets and variables** → **Actions**
-3. Add the following secrets:
-
-   - **WEBHOOK_SECRET**: The same secret you set in step 3 (use `openssl rand -hex 32` to generate)
-   - **WEBHOOK_URL**: Full URL to your webhook endpoint
-     - Format: `https://your-domain.com/api/deploy`
-     - Example: `https://proxyconf.api.dashrdp.cloud/api/deploy`
-
-#### 4.2. Verify CI/CD Setup
-
-1. The GitHub Actions workflow (`.github/workflows/deploy.yml`) is already configured
-2. It triggers on every push to the `main` branch
-3. The workflow calls your webhook endpoint with the secret token
-4. Your server automatically:
-   - Pulls the latest code from git
-   - Rebuilds Docker containers
-   - Restarts services
-
-#### 4.3. Test the Deployment
-
-```bash
-# Make a test commit and push to main branch
-git add .
-git commit -m "Test CI/CD deployment"
-git push origin main
-
-# Watch the deployment in GitHub Actions
-# Or check server logs:
-docker compose logs -f proxy-api
-```
-
-#### 4.4. Manual Deployment (Alternative)
-
-If you prefer manual deployment or need to deploy without git:
+To deploy updates:
 
 ```bash
 # Pull latest changes
@@ -203,20 +152,6 @@ curl -X POST https://proxyconf.api.dashrdp.cloud/api/execute-script \
 ```
 
 ### Update Application
-
-#### Automatic Update (Recommended)
-
-If CI/CD is configured, simply push to the `main` branch:
-
-```bash
-git add .
-git commit -m "Your changes"
-git push origin main
-```
-
-The deployment will happen automatically via GitHub Actions.
-
-#### Manual Update
 
 ```bash
 # Pull latest changes
@@ -414,8 +349,6 @@ dig proxyconf.api.dashrdp.cloud
 - [ ] Caddy automatic SSL management is working
 - [ ] Logs are being generated
 - [ ] Services restart on reboot
-- [ ] CI/CD pipeline configured (GitHub Secrets set)
-- [ ] Webhook secret configured in environment
 - [ ] Test deployment successful
 
 ## 📞 Support
@@ -439,68 +372,3 @@ If you encounter issues:
 - [ ] Caddy SSL automation tested
 - [ ] Performance optimized
 - [ ] Security headers enabled
-- [ ] CI/CD pipeline configured and tested
-- [ ] Webhook secret is strong and secure
-- [ ] GitHub Actions workflow is working
-- [ ] Automatic deployment tested successfully
-
-## 🔄 CI/CD Pipeline Details
-
-### How It Works
-
-1. **Developer pushes to main branch** → GitHub Actions workflow triggers
-2. **GitHub Actions calls webhook** → Sends POST request to `/api/deploy` endpoint
-3. **Webhook validates secret** → Ensures request is authorized
-4. **Deployment script executes** → Runs `deploy.sh` which:
-   - Pulls latest code from git
-   - Rebuilds Docker containers
-   - Restarts services
-5. **Deployment completes** → Application is updated automatically
-
-### Webhook Endpoint
-
-- **URL**: `https://your-domain.com/api/deploy`
-- **Method**: POST
-- **Headers**: 
-  - `Content-Type: application/json`
-  - `X-Webhook-Secret: <your-webhook-secret>`
-- **Response**: 202 Accepted (deployment triggered asynchronously)
-
-### Troubleshooting CI/CD
-
-If automatic deployment fails:
-
-1. **Check GitHub Actions logs**:
-   - Go to your repository → Actions tab
-   - View the latest workflow run
-
-2. **Check server logs**:
-   ```bash
-   docker compose logs -f proxy-api
-   ```
-
-3. **Verify webhook secret**:
-   ```bash
-   # Check if webhook secret is set
-   docker compose exec proxy-api env | grep WEBHOOK_SECRET
-   ```
-
-4. **Test webhook manually**:
-   ```bash
-   curl -X POST https://your-domain.com/api/deploy \
-     -H "Content-Type: application/json" \
-     -H "X-Webhook-Secret: your-webhook-secret" \
-     -d '{"ref":"refs/heads/main","sha":"test","repository":"test","pusher":"test"}'
-   ```
-
-5. **Check deployment script**:
-   ```bash
-   # Verify script exists and is executable
-   ls -la server/deploy.sh
-   ```
-
-6. **Verify git access**:
-   ```bash
-   # Check if git repository is accessible
-   docker compose exec proxy-api git status
-   ```

@@ -13,6 +13,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const progressMessage = document.getElementById('progressMessage');
     const progressPercentage = document.getElementById('progressPercentage');
     const progressFill = document.getElementById('progressFill');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const connectionIcon = connectionStatus.querySelector('.connection-icon');
+    const connectionText = connectionStatus.querySelector('.connection-text');
+    const statusLogToggle = document.getElementById('statusLogToggle');
+    const statusLog = document.getElementById('statusLog');
+    const statusLogEntries = document.getElementById('statusLogEntries');
+    const logCount = document.getElementById('logCount');
+    
+    // Status log state
+    let statusLogData = [];
+    let isStatusLogOpen = false;
 
     // Clear old data and start fresh
     clearOldData();
@@ -23,6 +34,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (message.action === 'progressUpdate') {
             updateProgress(message.progress);
         }
+    });
+    
+    // Status log toggle
+    statusLogToggle.addEventListener('click', function() {
+        toggleStatusLog();
     });
 
     // Password toggle functionality
@@ -263,15 +279,34 @@ document.addEventListener('DOMContentLoaded', function() {
         steps.forEach(step => {
             step.classList.remove('active', 'completed');
         });
+        
+        // Reset connection status
+        connectionStatus.className = 'connection-status';
+        connectionIcon.textContent = '●';
+        connectionText.textContent = 'Connecting...';
+        
+        // Clear status log
+        statusLogData = [];
+        statusLogEntries.innerHTML = '';
+        updateLogCount();
+        isStatusLogOpen = false;
+        statusLog.classList.add('hidden');
+        statusLogToggle.querySelector('.toggle-icon').textContent = '▼';
     }
     
     function updateProgress(progress) {
-        const { step, message, percentage } = progress;
+        const { step, message, percentage, status, details } = progress;
         
         // Update progress bar
         progressMessage.textContent = message;
         progressPercentage.textContent = `${percentage}%`;
         progressFill.style.width = `${percentage}%`;
+        
+        // Update connection status
+        updateConnectionStatus(status, message);
+        
+        // Add to status log
+        addStatusLogEntry(message, status, details);
         
         // Update step indicators
         const steps = document.querySelectorAll('.progress-step');
@@ -281,6 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
             steps.forEach(s => s.classList.remove('active', 'completed'));
             if (steps[0]) steps[0].classList.add('active');
             progressFill.style.background = 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)';
+            connectionStatus.className = 'connection-status error';
         } else {
             // Normal progress
             progressFill.style.background = 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)';
@@ -301,6 +337,123 @@ document.addEventListener('DOMContentLoaded', function() {
                     stepElement.classList.remove('active', 'completed');
                 }
             });
+        }
+    }
+    
+    function updateConnectionStatus(status, message) {
+        if (!status) return;
+        
+        connectionStatus.className = `connection-status ${status}`;
+        
+        const statusConfig = {
+            'preparing': { icon: '●', text: 'Preparing...', color: '#fbbf24' },
+            'ready': { icon: '✓', text: 'Ready', color: '#22c55e' },
+            'connecting': { icon: '⟳', text: 'Connecting...', color: '#3b82f6' },
+            'sending': { icon: '↑', text: 'Sending...', color: '#3b82f6' },
+            'sent': { icon: '✓', text: 'Sent', color: '#22c55e' },
+            'waiting': { icon: '⏳', text: 'Waiting...', color: '#fbbf24' },
+            'received': { icon: '↓', text: 'Received', color: '#22c55e' },
+            'validated': { icon: '✓', text: 'Validated', color: '#22c55e' },
+            'processing': { icon: '⟳', text: 'Processing...', color: '#3b82f6' },
+            'complete': { icon: '✓', text: 'Complete', color: '#22c55e' },
+            'error': { icon: '✗', text: 'Error', color: '#ef4444' }
+        };
+        
+        const config = statusConfig[status] || { icon: '●', text: message, color: '#ffffff' };
+        connectionIcon.textContent = config.icon;
+        connectionText.textContent = config.text;
+        connectionIcon.style.color = config.color;
+        connectionText.style.color = config.color;
+    }
+    
+    function addStatusLogEntry(message, status, details) {
+        const timestamp = new Date().toLocaleTimeString();
+        const entry = {
+            timestamp,
+            message,
+            status: status || 'info',
+            details: details || ''
+        };
+        
+        statusLogData.push(entry);
+        updateLogCount();
+        
+        // Create log entry element
+        const entryElement = document.createElement('div');
+        entryElement.className = `status-log-entry ${status || 'info'}`;
+        
+        const statusIcon = getStatusIcon(status);
+        const statusColor = getStatusColor(status);
+        
+        entryElement.innerHTML = `
+            <div class="log-entry-header">
+                <span class="log-icon" style="color: ${statusColor}">${statusIcon}</span>
+                <span class="log-message">${message}</span>
+                <span class="log-timestamp">${timestamp}</span>
+            </div>
+            ${details ? `<div class="log-details">${details}</div>` : ''}
+        `;
+        
+        statusLogEntries.appendChild(entryElement);
+        
+        // Auto-scroll to bottom
+        if (isStatusLogOpen) {
+            statusLogEntries.scrollTop = statusLogEntries.scrollHeight;
+        }
+    }
+    
+    function getStatusIcon(status) {
+        const icons = {
+            'preparing': '⚙',
+            'ready': '✓',
+            'connecting': '⟳',
+            'sending': '↑',
+            'sent': '✓',
+            'waiting': '⏳',
+            'received': '↓',
+            'validated': '✓',
+            'processing': '⟳',
+            'complete': '✓',
+            'error': '✗',
+            'info': '●'
+        };
+        return icons[status] || '●';
+    }
+    
+    function getStatusColor(status) {
+        const colors = {
+            'preparing': '#fbbf24',
+            'ready': '#22c55e',
+            'connecting': '#3b82f6',
+            'sending': '#3b82f6',
+            'sent': '#22c55e',
+            'waiting': '#fbbf24',
+            'received': '#22c55e',
+            'validated': '#22c55e',
+            'processing': '#3b82f6',
+            'complete': '#22c55e',
+            'error': '#ef4444',
+            'info': '#ffffff'
+        };
+        return colors[status] || '#ffffff';
+    }
+    
+    function updateLogCount() {
+        logCount.textContent = statusLogData.length;
+    }
+    
+    function toggleStatusLog() {
+        isStatusLogOpen = !isStatusLogOpen;
+        statusLog.classList.toggle('hidden', !isStatusLogOpen);
+        
+        const toggleIcon = statusLogToggle.querySelector('.toggle-icon');
+        toggleIcon.textContent = isStatusLogOpen ? '▲' : '▼';
+        
+        // Scroll to bottom when opening
+        if (isStatusLogOpen) {
+            setTimeout(() => {
+                statusLogEntries.scrollTop = statusLogEntries.scrollHeight;
+            }, 100);
         }
     }
 

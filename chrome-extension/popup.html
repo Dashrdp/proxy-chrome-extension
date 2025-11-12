@@ -95,7 +95,13 @@
         <!-- Progress Bar -->
         <div id="progressContainer" class="progress-container hidden">
             <div class="progress-header">
-                <span id="progressMessage">Initializing...</span>
+                <div class="progress-title-section">
+                    <span id="progressMessage">Initializing...</span>
+                    <div class="connection-status" id="connectionStatus">
+                        <span class="connection-icon">●</span>
+                        <span class="connection-text">Connecting...</span>
+                    </div>
+                </div>
                 <span id="progressPercentage">0%</span>
             </div>
             <div class="progress-bar">
@@ -121,6 +127,17 @@
                 <div class="progress-step" data-step="5">
                     <div class="step-icon">5</div>
                     <div class="step-label">Complete</div>
+                </div>
+            </div>
+            <!-- Status Log -->
+            <div class="status-log-container">
+                <button type="button" class="status-log-toggle" id="statusLogToggle">
+                    <span class="toggle-icon">▼</span>
+                    <span>Status Log</span>
+                    <span class="log-count" id="logCount">0</span>
+                </button>
+                <div id="statusLog" class="status-log hidden">
+                    <div id="statusLogEntries" class="status-log-entries"></div>
                 </div>
             </div>
         </div>

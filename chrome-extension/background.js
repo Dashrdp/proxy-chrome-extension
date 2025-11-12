@@ -52,32 +52,69 @@ async function executeRemoteProxyScript(data, progressCallback) {
             utcOffset: utcOffset
         };
         
-        // Send progress updates
+        // Send progress updates with detailed status
         if (progressCallback) {
-            progressCallback({ step: 1, message: 'Validating input data...', percentage: 10 });
-            await new Promise(resolve => setTimeout(resolve, 500));
+            progressCallback({ 
+                step: 1, 
+                message: 'Preparing request...', 
+                percentage: 10,
+                status: 'preparing',
+                details: 'Validating input data and preparing request payload'
+            });
+            await new Promise(resolve => setTimeout(resolve, 300));
             
-            progressCallback({ step: 2, message: 'Connecting to server...', percentage: 30 });
-            await new Promise(resolve => setTimeout(resolve, 500));
+            progressCallback({ 
+                step: 1, 
+                message: 'Request prepared successfully', 
+                percentage: 15,
+                status: 'ready',
+                details: 'All data validated and ready to send'
+            });
+            await new Promise(resolve => setTimeout(resolve, 200));
             
-            progressCallback({ step: 3, message: 'Executing proxy configuration...', percentage: 60 });
+            progressCallback({ 
+                step: 2, 
+                message: 'Connecting to server...', 
+                percentage: 25,
+                status: 'connecting',
+                details: `Establishing connection to ${SERVER_CONFIG.url}`
+            });
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
         
         // Use simple remote server execution with timezone data
         const result = await executeViaRemoteServer(dataWithTimezone, progressCallback);
         
         if (progressCallback) {
-            progressCallback({ step: 4, message: 'Processing results...', percentage: 90 });
-            await new Promise(resolve => setTimeout(resolve, 500));
+            progressCallback({ 
+                step: 4, 
+                message: 'Processing results...', 
+                percentage: 90,
+                status: 'processing',
+                details: 'Analyzing server response and formatting results'
+            });
+            await new Promise(resolve => setTimeout(resolve, 300));
             
-            progressCallback({ step: 5, message: 'Complete!', percentage: 100 });
+            progressCallback({ 
+                step: 5, 
+                message: 'Complete!', 
+                percentage: 100,
+                status: 'complete',
+                details: 'Script execution completed successfully'
+            });
         }
         
         return result;
         
     } catch (error) {
         if (progressCallback) {
-            progressCallback({ step: -1, message: 'Error: ' + error.message, percentage: 0 });
+            progressCallback({ 
+                step: -1, 
+                message: 'Execution failed', 
+                percentage: 0,
+                status: 'error',
+                details: error.message
+            });
         }
         throw new Error(`Script execution failed: ${error.message}`);
     }
@@ -168,7 +205,13 @@ async function executeViaRemoteServer(data, progressCallback) {
         console.log('=== NO API KEYS - CLEAN REQUEST ===');
         
         if (progressCallback) {
-            progressCallback({ step: 3, message: 'Sending request to server...', percentage: 65 });
+            progressCallback({ 
+                step: 2, 
+                message: 'Sending request to server...', 
+                percentage: 40,
+                status: 'sending',
+                details: 'POST request being sent to API endpoint'
+            });
         }
         
         const response = await fetch(`${SERVER_CONFIG.url}/api/execute-script`, {
@@ -180,7 +223,23 @@ async function executeViaRemoteServer(data, progressCallback) {
         });
         
         if (progressCallback) {
-            progressCallback({ step: 3, message: 'Receiving response from server...', percentage: 80 });
+            progressCallback({ 
+                step: 2, 
+                message: 'Request sent successfully', 
+                percentage: 50,
+                status: 'sent',
+                details: 'Request received by server, waiting for response'
+            });
+        }
+        
+        if (progressCallback) {
+            progressCallback({ 
+                step: 3, 
+                message: 'Waiting for server response...', 
+                percentage: 60,
+                status: 'waiting',
+                details: 'Server is processing the request'
+            });
         }
         
         // Check if response is JSON
@@ -193,7 +252,26 @@ async function executeViaRemoteServer(data, progressCallback) {
             // Response is not JSON, likely an HTML error page
             const textResponse = await response.text();
             console.error('Server returned non-JSON response:', textResponse.substring(0, 200));
+            if (progressCallback) {
+                progressCallback({ 
+                    step: -1, 
+                    message: 'Invalid server response', 
+                    percentage: 0,
+                    status: 'error',
+                    details: `Server returned non-JSON response (${response.status})`
+                });
+            }
             throw new Error(`Server returned invalid response (${response.status}). Please check if the server is running correctly.`);
+        }
+        
+        if (progressCallback) {
+            progressCallback({ 
+                step: 3, 
+                message: 'Response received', 
+                percentage: 75,
+                status: 'received',
+                details: 'Server response received, validating...'
+            });
         }
         
         console.log('=== SERVER RESPONSE DEBUG ===');
@@ -204,21 +282,77 @@ async function executeViaRemoteServer(data, progressCallback) {
             console.error('Server returned error status:', response.status);
             console.error('Error response:', responseData);
             
+            if (progressCallback) {
+                progressCallback({ 
+                    step: -1, 
+                    message: `Server error: ${response.status}`, 
+                    percentage: 0,
+                    status: 'error',
+                    details: responseData.error || `HTTP ${response.status} error from server`
+                });
+            }
             throw new Error(responseData.error || `Server error: ${response.status}`);
         }
         
         if (responseData.success) {
             console.log('Success! Response result:', responseData.result);
+            if (progressCallback) {
+                progressCallback({ 
+                    step: 3, 
+                    message: 'Response validated successfully', 
+                    percentage: 85,
+                    status: 'validated',
+                    details: 'Server response is valid and ready for processing'
+                });
+            }
             return responseData.result;
         } else {
             console.error('Server reported failure:', responseData.error);
+            if (progressCallback) {
+                progressCallback({ 
+                    step: -1, 
+                    message: 'Server reported failure', 
+                    percentage: 0,
+                    status: 'error',
+                    details: responseData.error || 'Unknown server error'
+                });
+            }
             throw new Error(responseData.error || 'Unknown server error');
         }
     } catch (error) {
         if (error.name === 'TypeError' && error.message.includes('fetch')) {
-            throw new Error(`Cannot connect to server at ${SERVER_CONFIG.url}. Please check the server URL and ensure the server is running.`);
+            const errorMsg = `Cannot connect to server at ${SERVER_CONFIG.url}. Please check the server URL and ensure the server is running.`;
+            if (progressCallback) {
+                progressCallback({ 
+                    step: -1, 
+                    message: 'Connection failed', 
+                    percentage: 0,
+                    status: 'error',
+                    details: errorMsg
+                });
+            }
+            throw new Error(errorMsg);
         } else if (error.message.includes('not valid JSON') || error.message.includes('Unexpected token')) {
-            throw new Error(`Server returned invalid response. The server may be returning an error page instead of JSON. Please check if the server is running correctly.`);
+            const errorMsg = `Server returned invalid response. The server may be returning an error page instead of JSON. Please check if the server is running correctly.`;
+            if (progressCallback) {
+                progressCallback({ 
+                    step: -1, 
+                    message: 'Invalid response format', 
+                    percentage: 0,
+                    status: 'error',
+                    details: errorMsg
+                });
+            }
+            throw new Error(errorMsg);
+        }
+        if (progressCallback && !error.message.includes('step: -1')) {
+            progressCallback({ 
+                step: -1, 
+                message: 'Error occurred', 
+                percentage: 0,
+                status: 'error',
+                details: error.message
+            });
         }
         throw error;
     }
