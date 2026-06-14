@@ -8,7 +8,7 @@ Complete guide for deploying the DashRDP Proxy Configurator API to Ubuntu server
 
 - Ubuntu 20.04+ server
 - Docker and Docker Compose installed
-- Domain `proxyconf.api.dashrdp.cloud` pointing to your server
+- Domain `proxyconf-api.dashrdp.cloud` pointing to your server
 - Root or sudo access
 
 ### 1. Server Setup
@@ -143,10 +143,10 @@ docker-compose logs -f nginx
 
 ```bash
 # API health check
-curl https://proxyconf.api.dashrdp.cloud/api/health
+curl https://proxyconf-api.dashrdp.cloud/api/health
 
 # Test API endpoint
-curl -X POST https://proxyconf.api.dashrdp.cloud/api/execute-script \
+curl -X POST https://proxyconf-api.dashrdp.cloud/api/execute-script \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-secret-api-key-here" \
   -d '{"serverIp":"192.168.1.100","password":"test","proxyIpPort":"192.168.1.200:8080"}'
@@ -231,8 +231,8 @@ EOF
 3. **Domain Not Resolving**
    ```bash
    # Check DNS
-   dig proxyconf.api.dashrdp.cloud
-   nslookup proxyconf.api.dashrdp.cloud
+   dig proxyconf-api.dashrdp.cloud
+   nslookup proxyconf-api.dashrdp.cloud
    ```
 
 4. **Port Conflicts**
@@ -324,7 +324,7 @@ Ensure your domain points to your server:
 
 ```bash
 # Check current DNS
-dig proxyconf.api.dashrdp.cloud
+dig proxyconf-api.dashrdp.cloud
 
 # Should return your server's public IP
 ```
@@ -346,8 +346,8 @@ dig proxyconf.api.dashrdp.cloud
 If you encounter issues:
 
 1. Check the logs: `docker-compose logs -f`
-2. Verify DNS: `dig proxyconf.api.dashrdp.cloud`
-3. Test SSL: `curl -I https://proxyconf.api.dashrdp.cloud`
+2. Verify DNS: `dig proxyconf-api.dashrdp.cloud`
+3. Test SSL: `curl -I https://proxyconf-api.dashrdp.cloud`
 4. Check firewall: `sudo ufw status`
 
 ## 🎯 Production Checklist

@@ -22,26 +22,109 @@ function extractFieldsFromPage() {
     console.log('Page URL:', window.location.href);
     console.log('Page title:', document.title);
     
-    // Debug: Show all input fields on the page
     debugShowAllInputs();
     
     const result = {
-        serverIp: null,
-        password: null,
-        proxyIpPort: null
+        serverIp: findServerIP(),
+        password: findPassword(),
+        proxyIpPort: findProxyIpPort(),
+        sources: {}
     };
 
-    // Extract server IP
-    result.serverIp = findServerIP();
-    
-    // Extract password
-    result.password = findPassword();
-    
-    // Extract proxy IP:Port
-    result.proxyIpPort = findProxyIpPort();
+    result.sources = detectFieldSources(result);
 
     console.log('=== Final extraction result ===', result);
     return result;
+}
+
+function detectFieldSources(result) {
+    const sources = {};
+
+    if (result.serverIp) {
+        sources.serverIp = detectServerIpSource(result.serverIp);
+    }
+    if (result.password) {
+        sources.password = detectPasswordSource();
+    }
+    if (result.proxyIpPort) {
+        sources.proxyIpPort = detectProxySource(result.proxyIpPort);
+    }
+
+    return sources;
+}
+
+function detectServerIpSource(ip) {
+    const inputs = document.querySelectorAll('input[type="text"], input[type="url"], input:not([type])');
+    for (const input of inputs) {
+        if (input.value.trim().includes(ip)) {
+            return describeInputSource(input);
+        }
+    }
+    return 'page text';
+}
+
+function detectPasswordSource() {
+    const passwordInputs = document.querySelectorAll('input[type="password"]');
+    for (const input of passwordInputs) {
+        if (input.value.trim()) {
+            return describeInputSource(input);
+        }
+    }
+
+    const textInputs = document.querySelectorAll('input[type="text"], input');
+    for (const input of textInputs) {
+        const label = getAssociatedLabel(input);
+        const placeholder = input.placeholder || '';
+        if (isPasswordField(input, label, placeholder) && input.value.trim()) {
+            return describeInputSource(input);
+        }
+    }
+
+    return 'password field';
+}
+
+function detectProxySource(proxyValue) {
+    const [proxyIp, proxyPort] = proxyValue.split(':');
+
+    const custom390 = document.querySelector('input[name="customfield[390]"], #customfield390');
+    const custom391 = document.querySelector('input[name="customfield[391]"], #customfield391');
+    if (custom390 && custom391 && custom390.value.trim() === proxyIp && custom391.value.trim() === proxyPort) {
+        return 'customfield[390] + customfield[391]';
+    }
+
+    const fieldLabels = document.querySelectorAll('td.fieldlabel');
+    for (const labelCell of fieldLabels) {
+        const labelText = labelCell.textContent.trim().toLowerCase();
+        if (labelText.includes('proxy')) {
+            const inputField = findInputNearLabel(labelCell);
+            if (inputField && (inputField.value.trim() === proxyIp || inputField.value.trim() === proxyPort || inputField.value.trim() === proxyValue)) {
+                return `td.fieldlabel ("${labelCell.textContent.trim()}")`;
+            }
+        }
+    }
+
+    const proxySelectors = [
+        'input[name*="proxy"]', 'input[id*="proxy"]',
+        'input[name="customfield[390]"]', 'input[name="customfield[391]"]'
+    ];
+    for (const selector of proxySelectors) {
+        const field = document.querySelector(selector);
+        if (field && field.value.trim() && (field.value.trim() === proxyIp || field.value.trim() === proxyPort || field.value.trim() === proxyValue)) {
+            return describeInputSource(field);
+        }
+    }
+
+    if (/\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):\d{1,5}\b/.test(document.body.textContent)) {
+        return 'page text';
+    }
+
+    return 'detected field';
+}
+
+function describeInputSource(input) {
+    if (input.name) return input.name;
+    if (input.id) return `#${input.id}`;
+    return `input[type=${input.type || 'text'}]`;
 }
 
 function debugShowAllInputs() {
@@ -598,17 +681,19 @@ function isLocalIP(ip) {
     return false;
 }
 
-// Auto-extraction on page load (optional)
-function autoExtractOnLoad() {
-    // Only auto-extract if the page looks like it has relevant forms
+// Auto-extraction on page load (respects options)
+async function autoExtractOnLoad() {
+    const settings = await getExtensionSettings();
+    if (!settings.autoExtractWhmcs) {
+        return;
+    }
+
     const hasPasswordField = document.querySelector('input[type="password"]') !== null;
     const hasIPField = /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/.test(document.body.textContent);
-    
+
     if (hasPasswordField || hasIPField) {
-        // Store extracted data for quick access
         const extractedData = extractFieldsFromPage();
         if (extractedData.serverIp || extractedData.password || extractedData.proxyIpPort) {
-            // Could notify the extension that data is available
             chrome.runtime.sendMessage({
                 action: 'dataAvailable',
                 data: extractedData

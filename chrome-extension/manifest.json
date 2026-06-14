@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "DashRDP Proxy Configurator",
-  "version": "1.0",
+  "version": "1.2.1",
   "description": "Advanced proxy configuration tool for DashRDP environments - Extract and configure proxy settings",
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "notifications"
   ],
   "host_permissions": [
     "http://*/*",
@@ -14,21 +15,31 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "DashRDP Proxy Configurator"
+    "default_title": "DashRDP Proxy Configurator",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
   },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "options_page": "options.html",
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["python_script.py"],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "*://portal.dashrdp.com/*",
+        "*://*/admin/clientsservices.php*",
+        "*://*/admin/clientservices.php*",
+        "*://*/admin/clientssummary.php*"
+      ],
+      "js": ["config.js", "content.js"]
     }
   ]
 }

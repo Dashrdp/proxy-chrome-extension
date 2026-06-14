@@ -5,7 +5,12 @@ import json
 import logging
 import os
 from datetime import datetime
-# Removed complex imports for simplicity
+
+from winrm_diagnostics import (
+    classify_connection_error,
+    run_preflight_check,
+    build_error_response,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -392,7 +397,43 @@ $data.timezone
 
     except Exception as e:
         logger.error(f"Error executing PowerShell script: {str(e)}")
-        raise Exception(f"Script execution failed: {str(e)}")
+        raise
+
+@app.route('/api/preflight-check', methods=['POST'])
+def preflight_check():
+    """
+    Pre-flight connectivity check: WinRM port + credential validation before full script.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "success": False,
+                **build_error_response("UNKNOWN_ERROR", "No JSON data provided"),
+            }), 400
+
+        target_ip = data.get('serverIp')
+        password = data.get('password')
+
+        if not all([target_ip, password]):
+            return jsonify({
+                "success": False,
+                **build_error_response("UNKNOWN_ERROR", "Missing required fields: serverIp, password"),
+            }), 400
+
+        logger.info(f"Preflight check for {target_ip}")
+        result = run_preflight_check(target_ip, password)
+        status_code = 200 if result.get("success") else 422
+        return jsonify(result), status_code
+
+    except Exception as e:
+        logger.error(f"Preflight error: {str(e)}")
+        payload = request.get_json(silent=True) or {}
+        error_info = classify_connection_error(e, payload.get('serverIp'))
+        return jsonify({
+            "success": False,
+            **error_info,
+        }), 500
 
 @app.route('/api/execute-script', methods=['POST'])
 def execute_script():
@@ -449,9 +490,11 @@ def execute_script():
 
     except Exception as e:
         logger.error(f"API error: {str(e)}")
+        payload = request.get_json(silent=True) or {}
+        error_info = classify_connection_error(e, payload.get('serverIp'))
         return jsonify({
             "success": False,
-            "error": str(e)
+            **error_info,
         }), 500
 
 def format_result_for_extension(result):
@@ -539,6 +582,7 @@ def root():
         "service": "DashRDP Proxy Configurator API",
         "version": "1.0",
         "endpoints": {
+            "POST /api/preflight-check": "Pre-flight WinRM port and credential check",
             "POST /api/execute-script": "Execute PowerShell script with proxy configuration",
             "GET /api/health": "Health check endpoint"
         },

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DashRDP Proxy Configurator — Options</title>
+    <link rel="stylesheet" href="options.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="options-container">
+        <header class="options-header">
+            <h1>DashRDP Proxy Configurator</h1>
+            <p>Extension settings for internal ops</p>
+        </header>
+
+        <form id="optionsForm">
+            <section class="option-group">
+                <label for="apiBaseUrl">API base URL</label>
+                <input type="url" id="apiBaseUrl" name="apiBaseUrl" placeholder="https://proxyconf-api.dashrdp.cloud" required>
+                <span class="option-hint">Override for dev, staging, or production environments</span>
+            </section>
+
+            <section class="option-group option-toggle">
+                <label class="toggle-label">
+                    <input type="checkbox" id="rememberFields" name="rememberFields">
+                    <span class="toggle-text">Remember fields between sessions</span>
+                </label>
+                <span class="option-hint">Saves server IP, password, and proxy in local storage</span>
+            </section>
+
+            <section class="option-group option-toggle">
+                <label class="toggle-label">
+                    <input type="checkbox" id="autoExtractWhmcs" name="autoExtractWhmcs">
+                    <span class="toggle-text">Auto-extract on WHMCS pages</span>
+                </label>
+                <span class="option-hint">Detect fields automatically when a WHMCS service page loads</span>
+            </section>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-save">Save settings</button>
+                <span id="saveStatus" class="save-status hidden">Saved</span>
+            </div>
+        </form>
+    </div>
+    <script src="config.js"></script>
+    <script src="options.js"></script>
+</body>
+</html>

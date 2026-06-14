@@ -1,315 +1,108 @@
-# DashRDP Proxy Configurator Backend API
+# DashRDP Proxy Configurator
 
-A Python Flask API that receives data from the DashRDP Proxy Configurator Chrome extension and executes PowerShell scripts to configure proxy settings on remote Windows machines.
+Chrome extension + Flask API for internal ops staff to configure Windows RDP proxy settings from WHMCS service pages.
 
-## Features
+## What it does
 
-- **RESTful API**: Receives data from Chrome extension via HTTP POST requests
-- **PowerShell Execution**: Uses pypsrp to execute PowerShell scripts on remote Windows machines
-- **Proxy Configuration**: Automatically configures system-wide and user-level proxy settings
-- **IP Information**: Retrieves public IP, ISP, and country information through the configured proxy
-- **RDP License Management**: 🆕 Intelligent RDP license checking and renewal
-  - Automatically checks remaining license days
-  - Only performs rearm when license is expired
-  - Restarts RDP service after rearm
-  - Preserves precious rearm attempts
-- **Error Handling**: Comprehensive error handling and logging
-- **API Key Authentication**: Secure API key-based authentication
+1. Open a WHMCS service page (or similar admin page)
+2. Extension auto-detects server IP, password, and proxy IP:Port from the page
+3. Operator reviews fields and clicks **EXECUTE SCRIPT**
+4. API connects to the Windows host via WinRM, configures proxy, verifies geo, and syncs timezone
 
-## Prerequisites
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system diagram and data flow.
 
-- Python 3.7 or higher
-- Windows machines with PowerShell and WinRM enabled
-- Network access to target Windows machines
-- Administrator credentials for target machines
+## Quick start — extension
 
-## Installation
+1. Open `chrome://extensions`
+2. Enable **Developer mode**
+3. Click **Load unpacked** → select `chrome-extension/`
+4. Pin the extension and open a WHMCS service page
+5. Click the extension icon — saved fields restore automatically; a detection banner appears if fields were found on the page
 
-1. **Clone or download the repository**
-   ```bash
-   git clone <repository-url>
-   cd proxy-chrome-extension
-   ```
-
-2. **Create a virtual environment (recommended)**
-   ```bash
-   python -m venv venv
-   
-   # On Windows
-   venv\Scripts\activate
-   
-   # On Linux/Mac
-   source venv/bin/activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure the API key**
-   - Open `app.py`
-   - Change the `API_KEY` variable to your desired secret key
-   - Update the same key in your Chrome extension's `background.js`
-
-## Configuration
-
-### API Key Setup
-
-1. **In the backend (`app.py`)**:
-   ```python
-   API_KEY = 'your-secret-api-key-here'  # Change this
-   ```
-
-2. **In the Chrome extension (`chrome-extension/background.js`)**:
-   ```javascript
-   const SERVER_CONFIG = {
-       url: 'https://your-server.com',  // Your server URL
-       apiKey: 'your-secret-api-key-here'  // Same key as above
-   };
-   ```
-
-### Server Configuration
-
-Update the server URL in your Chrome extension to point to your deployed API:
-
-```javascript
-const SERVER_CONFIG = {
-    url: 'https://your-domain.com',  // Your actual server URL
-    apiKey: 'your-secret-api-key-here'
-};
-```
-
-## Usage
-
-### Development
-
-Run the API in development mode:
+## Quick start — API (development)
 
 ```bash
+cd server
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
 python app.py
 ```
 
-The API will be available at `http://localhost:5000`
+API runs at `http://localhost:5000`. Update `SERVER_CONFIG.url` in `chrome-extension/background.js` to point at your server.
 
-### Production
+## Production API
 
-For production deployment, use a WSGI server like Gunicorn:
+Deployed at **`https://proxyconf-api.dashrdp.cloud`** via Docker + Caddy. See `server/DEPLOYMENT.md`.
 
-```bash
-gunicorn -w 4 -b 0.0.0.0:5000 app:app
-```
-
-### Docker (Optional)
-
-Create a `Dockerfile`:
-
-```dockerfile
-FROM python:3.9-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY app.py .
-
-EXPOSE 5000
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]
-```
-
-Build and run:
-
-```bash
-docker build -t proxy-api .
-docker run -p 5000:5000 proxy-api
-```
-
-## API Endpoints
-
-### POST /api/execute-script
-
-Executes the PowerShell script with proxy configuration.
-
-**Headers:**
-```
-Content-Type: application/json
-X-API-Key: your-secret-api-key-here
-```
-
-**Request Body:**
-```json
-{
-    "serverIp": "192.168.1.100",
-    "password": "admin_password",
-    "proxyIpPort": "192.168.1.200:8080"
-}
-```
-
-**Response:**
-```json
-{
-    "success": true,
-    "result": "Public IP: 203.0.113.1\nISP: Example ISP\nCountry: US\nTarget IP: 192.168.1.100\nProxy: 192.168.1.200:8080\nStatus: Proxy Active"
-}
-```
-
-### POST /api/check-rdp-license 🆕
-
-Checks RDP license status without making changes.
-
-**Request Body:**
-```json
-{
-    "serverIp": "192.168.1.100",
-    "password": "admin_password"
-}
-```
-
-**Response:**
-```json
-{
-    "success": true,
-    "result": "✅ LICENSE ACTIVE\nRemaining Days: 45\nGrace Status: ...\nTimestamp: ...",
-    "remaining_days": 45,
-    "is_expired": false
-}
-```
-
-### POST /api/extend-rdp 🆕
-
-Checks license and extends RDP license if expired.
-
-**Request Body:**
-```json
-{
-    "serverIp": "192.168.1.100",
-    "password": "admin_password",
-    "forceRearm": false
-}
-```
-
-**Response (if license valid):**
-```json
-{
-    "success": true,
-    "result": "✅ RDP License Still Valid\nRemaining Days: 45\nAction: No rearm needed\n...",
-    "action_taken": "no_action_needed",
-    "remaining_days": 45
-}
-```
-
-**Response (if license expired):**
-```json
-{
-    "success": true,
-    "result": "RDP Extension Complete\nStatus: Success\nService Status: Running\n...",
-    "action_taken": "rearm_executed",
-    "previous_remaining_days": 0
-}
-```
+## API endpoints
 
 ### GET /api/health
 
-Health check endpoint.
+No authentication required.
+
+```json
+{ "status": "healthy", "timestamp": "...", "service": "DashRDP Proxy Configurator API" }
+```
+
+### POST /api/execute-script
+
+No authentication required today (Phase 3 will add `X-API-Key`).
+
+**Request:**
+```json
+{
+  "serverIp": "192.168.1.100",
+  "password": "admin_password",
+  "proxyIpPort": "192.168.1.200:8080"
+}
+```
 
 **Response:**
 ```json
 {
-    "status": "healthy",
-    "timestamp": "2024-01-01T12:00:00.000000",
-    "service": "DashRDP Proxy Configurator API"
+  "success": true,
+  "result": "Public IP: 203.0.113.1\nISP: Example ISP\nCountry: US\nStatus: Proxy Active"
 }
 ```
 
-### GET /
+## Configuration
 
-Root endpoint with API information.
+The extension server URL is set in `chrome-extension/background.js`:
 
-## PowerShell Script
+```javascript
+const SERVER_CONFIG = {
+    url: 'https://proxyconf-api.dashrdp.cloud'
+};
+```
 
-The API executes the following PowerShell script on the target machine:
+There is no API key configuration today. Phase 3 will add an options page for key storage.
 
-1. **Sets system-wide proxy** in the Windows Registry
-2. **Sets user-level proxy** in the Windows Registry  
-3. **Retrieves public IP information** using the configured proxy
-4. **Returns IP, ISP, and country** information
+## Session behavior
 
-## Error Handling
-
-The API includes comprehensive error handling for:
-
-- Invalid API keys
-- Missing required fields
-- Network connection issues
-- PowerShell execution errors
-- Remote machine authentication failures
-
-## Security Considerations
-
-1. **API Key**: Use a strong, unique API key
-2. **HTTPS**: Deploy with HTTPS in production
-3. **Network Security**: Ensure secure network access to target machines
-4. **Credentials**: Passwords are transmitted securely via HTTPS
-5. **Logging**: Sensitive information is not logged
+- Fields persist between popup opens via `chrome.storage.local`
+- Use **Clear session** to wipe saved credentials
+- Auto-detected fields from the current page appear in a blue banner — click **Fill** to apply
 
 ## Troubleshooting
 
-### Common Issues
+| Symptom | Fix |
+|---------|-----|
+| API Offline in popup header | Check server is running; verify `SERVER_CONFIG.url` |
+| No fields detected | Reload WHMCS page; use **EXTRACT FROM PAGE** manually |
+| Connection error on execute | Verify WinRM is enabled on target host; check credentials |
+| Fields empty on open | Previously wiped on every open — fixed in v1.0.1; use **Clear session** to reset |
 
-1. **Connection Refused**
-   - Check if the API server is running
-   - Verify the server URL in the Chrome extension
-   - Check firewall settings
+## Project structure
 
-2. **Authentication Failed**
-   - Verify the API key matches in both backend and extension
-   - Check if the target machine credentials are correct
-
-3. **PowerShell Execution Failed**
-   - Ensure WinRM is enabled on target machines
-   - Check if the target machine is accessible
-   - Verify Administrator credentials
-
-4. **Proxy Configuration Not Applied**
-   - Check if the target machine allows registry modifications
-   - Verify the proxy IP:Port format is correct
-
-### Logs
-
-The API logs all requests and errors. Check the console output or log files for detailed error information.
-
-## Development
-
-### Testing the API
-
-You can test the API using curl:
-
-```bash
-curl -X POST http://localhost:5000/api/execute-script \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-secret-api-key-here" \
-  -d '{
-    "serverIp": "192.168.1.100",
-    "password": "admin_password",
-    "proxyIpPort": "192.168.1.200:8080"
-  }'
 ```
-
-## RDP License Management 🆕
-
-For detailed documentation on the RDP License Management feature, see:
-- **[Quick Start Guide](QUICK_START_RDP_LICENSE.md)** - Get started quickly
-- **[Comprehensive Documentation](RDP_LICENSE_MANAGEMENT.md)** - Full feature documentation
-- **[Changelog](CHANGELOG.md)** - All changes and technical details
-
-### Key Features:
-✅ Automatic license status checking  
-✅ Smart rearm decision (only when expired)  
-✅ RDP service restart after rearm  
-✅ Session disconnect for license refresh  
-✅ Remaining days display  
-✅ Force rearm option  
+proxy-chrome-extension/
+├── chrome-extension/     # MV3 extension (popup, content script, background)
+├── server/               # Flask API + Docker deployment
+├── ARCHITECTURE.md       # System design reference
+└── CHANGELOG.md          # Historical change log
+```
 
 ## License
 
-This project is licensed under the MIT License.
+MIT

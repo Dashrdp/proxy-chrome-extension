@@ -31,36 +31,60 @@
                 </div>
                 <h1>DashRDP Proxy Configurator</h1>
             </div>
-            <div class="health-status checking" id="healthStatus">
-                <div class="health-indicator" id="healthIndicator">
-                    <span class="health-icon">●</span>
+            <div class="header-right">
+                <div class="health-status checking" id="healthStatus">
+                    <div class="health-indicator" id="healthIndicator">
+                        <span class="health-icon">●</span>
+                    </div>
+                    <span class="health-text" id="healthText">Checking...</span>
                 </div>
-                <span class="health-text" id="healthText">Checking...</span>
+                <a href="#" id="optionsLink" class="options-link" title="Settings">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                </a>
             </div>
+        </div>
+
+        <p class="inline-help">Open WHMCS service page → Extract → Configure Proxy</p>
+        
+        <div id="detectionBanner" class="detection-banner hidden">
+            <span class="detection-label">Fields detected — click to fill</span>
+            <div class="detection-actions">
+                <button type="button" id="detectionFillBtn" class="btn-detection-fill">Fill</button>
+                <button type="button" id="detectionDismissBtn" class="btn-detection-dismiss" title="Dismiss">✕</button>
+            </div>
+        </div>
+
+        <div id="extractionPanel" class="extraction-panel hidden">
+            <div class="extraction-header">
+                <span class="extraction-title">Review extracted fields</span>
+                <button type="button" id="confirmExtractBtn" class="btn-confirm-extract">Looks good</button>
+            </div>
+            <ul id="extractionList" class="extraction-list"></ul>
         </div>
         
         <form id="proxyForm">
             <div class="form-section">
                 <div class="form-group">
                     <label for="serverIp">
-                        <span class="label-icon">🖥️</span>
+                        <svg class="label-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                         Server IP
                     </label>
                     <div class="input-wrapper">
-                        <input type="text" id="serverIp" name="serverIp" placeholder="66.181.39.100" required>
+                        <input type="text" id="serverIp" name="serverIp" placeholder="Dedicated server IP" required>
                         <div class="input-border"></div>
                     </div>
                 </div>
                 
                 <div class="form-group">
                     <label for="password">
-                        <span class="label-icon">🔐</span>
+                        <svg class="label-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                         Password
                     </label>
                     <div class="input-wrapper">
-                        <input type="password" id="password" name="password" placeholder="••••••••" required>
+                        <input type="password" id="password" name="password" placeholder="Administrator password" required>
                         <button type="button" class="password-toggle" id="passwordToggle" title="Toggle password visibility">
-                            <span class="toggle-icon">👁️</span>
+                            <svg class="icon-eye" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <svg class="icon-eye-off hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                         </button>
                         <div class="input-border"></div>
                     </div>
@@ -68,11 +92,11 @@
                 
                 <div class="form-group">
                     <label for="proxyIpPort">
-                        <span class="label-icon">🌐</span>
+                        <svg class="label-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                         Proxy IP:Port
                     </label>
                     <div class="input-wrapper">
-                        <input type="text" id="proxyIpPort" name="proxyIpPort" placeholder="e.g., 192.168.1.100:8080" required>
+                        <input type="text" id="proxyIpPort" name="proxyIpPort" placeholder="Proxy IP and port (e.g. 0.0.0.0:8080)" required>
                         <div class="input-border"></div>
                     </div>
                 </div>
@@ -80,19 +104,25 @@
             
             <div class="form-actions">
                 <button type="submit" id="executeBtn" class="btn-primary">
-                    <span class="btn-icon">⚡</span>
-                    EXECUTE SCRIPT
+                    <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    Configure Proxy
                 </button>
                 <button type="button" id="extractBtn" class="btn-secondary">
-                    <span class="btn-icon">📤</span>
-                    EXTRACT FROM PAGE
+                    <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Extract from page
+                </button>
+                <button type="button" id="testConnectionBtn" class="btn-secondary">
+                    <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    Test connection
+                </button>
+                <button type="button" id="clearSessionBtn" class="btn-tertiary">
+                    Clear session
                 </button>
             </div>
         </form>
         
         <div id="status" class="status hidden"></div>
         
-        <!-- Progress Bar -->
         <div id="progressContainer" class="progress-container hidden">
             <div class="progress-header">
                 <div class="progress-title-section">
@@ -129,7 +159,6 @@
                     <div class="step-label">Complete</div>
                 </div>
             </div>
-            <!-- Status Log -->
             <div class="status-log-container">
                 <button type="button" class="status-log-toggle" id="statusLogToggle">
                     <span class="toggle-icon">▼</span>
@@ -142,12 +171,29 @@
             </div>
         </div>
         
+        <div id="errorPanel" class="error-panel hidden">
+            <div class="error-panel-header">
+                <span id="errorTitle" class="error-title">Error</span>
+                <span id="errorCode" class="error-code"></span>
+            </div>
+            <p id="errorDetail" class="error-detail"></p>
+            <p id="errorRecommendation" class="error-recommendation"></p>
+            <ul id="errorChecks" class="error-checks"></ul>
+        </div>
+
         <div id="results" class="results hidden">
-            <h3>Results:</h3>
+            <div class="results-header">
+                <h3>Results</h3>
+                <button type="button" id="copyResultsBtn" class="btn-copy" title="Copy to clipboard">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Copy
+                </button>
+            </div>
             <div id="output"></div>
         </div>
     </div>
     
+    <script src="config.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

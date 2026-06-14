@@ -63,7 +63,7 @@ A Python Flask API that receives data from the DashRDP Proxy Configurator Chrome
 2. **In the Chrome extension (`chrome-extension/background.js`)**:
    ```javascript
    const SERVER_CONFIG = {
-       url: 'https://proxyconf.api.dashrdp.cloud',  // Your server URL
+       url: 'https://proxyconf-api.dashrdp.cloud',  // Your server URL
        apiKey: 'your-secret-api-key-here'  // Same key as above
    };
    ```
@@ -75,12 +75,12 @@ A Python Flask API that receives data from the DashRDP Proxy Configurator Chrome
 Before deploying, update the domain in the `Caddyfile`:
 
 ```
-proxyconf.api.dashrdp.cloud {
+proxyconf-api.dashrdp.cloud {
     # Your domain configuration
 }
 ```
 
-Replace `proxyconf.api.dashrdp.cloud` with your actual domain name.
+Replace `proxyconf-api.dashrdp.cloud` with your actual domain name.
 
 #### Chrome Extension Configuration
 
@@ -88,7 +88,7 @@ Update the server URL in your Chrome extension to point to your deployed API:
 
 ```javascript
 const SERVER_CONFIG = {
-    url: 'https://proxyconf.api.dashrdp.cloud',  // Your actual server URL
+    url: 'https://proxyconf-api.dashrdp.cloud',  // Your actual server URL
     apiKey: 'your-secret-api-key-here'
 };
 ```
@@ -255,7 +255,7 @@ docker compose logs -f proxy-api
 You can test the API using curl:
 
 ```bash
-curl -X POST https://proxyconf.api.dashrdp.cloud/api/execute-script \
+curl -X POST https://proxyconf-api.dashrdp.cloud/api/execute-script \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-secret-api-key-here" \
   -d '{

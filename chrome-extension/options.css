@@ -1,0 +1,118 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0a0a0a;
+    color: #ffffff;
+    min-width: 360px;
+}
+
+.options-container {
+    max-width: 480px;
+    padding: 24px;
+}
+
+.options-header {
+    margin-bottom: 28px;
+}
+
+.options-header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.options-header p {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.option-group {
+    margin-bottom: 24px;
+}
+
+.option-group > label:not(.toggle-label) {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 8px;
+}
+
+.option-group input[type="url"] {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+}
+
+.option-group input[type="url"]:focus {
+    border-color: rgba(59, 130, 246, 0.6);
+}
+
+.option-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+    line-height: 1.4;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.toggle-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #3b82f6;
+}
+
+.form-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 32px;
+}
+
+.btn-save {
+    padding: 10px 20px;
+    background: #ffffff;
+    color: #000000;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.btn-save:hover {
+    background: #e8e8e8;
+}
+
+.save-status {
+    font-size: 12px;
+    color: #22c55e;
+    font-weight: 500;
+}
+
+.hidden {
+    display: none !important;
+}
